@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/codex-hooks/session_context.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\codex-hooks\\session_context.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/codex-hooks/session_context.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\codex-hooks\\session_context.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/codex-hooks/pre_tool_use.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\codex-hooks\\pre_tool_use.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

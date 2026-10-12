@@ -65,6 +65,8 @@ test-team-package: pack
 
 test-team-candidate:
 	python3 scripts/pack-team.py --check plugins/shode-house
+	python3 scripts/pack-team.py --host antigravity --check plugins/shode-house-antigravity
+	python3 -m unittest tests.test_codex_adapter
 	python3 tests/test_team_entry.py
 	python3 tests/test_team_candidate.py
 	python3 tests/test_team_run_check.py

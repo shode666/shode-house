@@ -617,6 +617,8 @@ jobs:
 
           sec "25. full-team preservation and discovery adapters (structural, not live acceptance)"
           python3 scripts/pack-team.py --check plugins/shode-house || fail=1
+          python3 scripts/pack-team.py --host antigravity --check plugins/shode-house-antigravity || fail=1
+          python3 -m unittest tests.test_codex_adapter || fail=1
           # 25b retired (v4 R42/R48, S2 integration v7u.4.12): generated entries are source verbatim + a resolution footer,
           #   no longer thin adapters; the parity audit above (--check) is the gate for the generated tree
           python3 tests/test_team_entry.py || fail=1

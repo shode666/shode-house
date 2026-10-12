@@ -2,5 +2,27 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "shode-house",
   "version": "4.0.1",
-  "description": "Shode House: full expert team on Claude Code; skills-only, single session on Codex, Cursor and Antigravity."
+  "description": "Shode House for Codex: coordinator, six role contracts, fresh review workers, and trusted Python-backed structured-write guards.",
+  "skills": "./skills/",
+  "extensions": {
+    "com.openai": {
+      "hooks": "./codex-hooks/hooks.json",
+      "onboardingSkill": "./skills/ask/SKILL.md",
+      "interface": {
+        "displayName": "Shode House",
+        "shortDescription": "The full software-house expert team",
+        "longDescription": "Shode House for Codex: coordinator, six role contracts, fresh review workers, and trusted Python-backed structured-write guards.",
+        "developerName": "shode666",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Interactive",
+          "Write"
+        ],
+        "websiteURL": "https://github.com/shode666/claude-skill-shode-house",
+        "defaultPrompt": [
+          "Work with the Shode House team on this project."
+        ]
+      }
+    }
+  }
 }

@@ -3239,6 +3239,26 @@
         "`shode-house:plan` (discover mode) + Domain SME (a separate spawn, no discover-mode role-play)"
       ],
       "reason": "4.0.1 core-agent consolidation (18 types -> 6; shode-house-jni): retired-role list/persona line reworded to the 4.0.1 type names; the rule it carried stays at the replacement"
+    },
+    {
+      "source": "skills/workflow/ask/SKILL.md",
+      "old_fragment": "- No shode-house output style in this session's system prompt (the router style that makes this main session the team lead; absent on Codex, Cursor, Antigravity and on a surface without plugin output styles; the safety-floor block in this skill's adapter is not that style): team execution is unavailable",
+      "replacement": "skills/workflow/ask/SKILL.md",
+      "requires": [
+        "team execution is available only through genuine",
+        "If delegation is unavailable, state that team execution is unavailable"
+      ],
+      "reason": "First-class Codex adapter: capability-based genuine worker delegation replaces the Claude-style-only gate while preserving fail-closed behavior when delegation is unavailable."
+    },
+    {
+      "source": "skills/workflow/ask/SKILL.md",
+      "old_fragment": "Never spawn or delegate shode-house roles; report `BLOCKED: team execution needs the router style (Claude Code)`, then help in this one session; never present it as independent review or role-play a team.",
+      "replacement": "skills/workflow/ask/SKILL.md",
+      "requires": [
+        "Never replace a separate worker with a persona summary or role-play",
+        "keep required independent acceptance BLOCKED"
+      ],
+      "reason": "First-class Codex adapter: independent review is permitted only through genuine separate workers, with blocked acceptance retained when workers are unavailable."
     }
   ]
 }

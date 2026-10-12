@@ -1,0 +1,78 @@
+# Engineering loop inside the team
+
+Read for design, implementation or diagnosis; not for greetings or routine status.
+This refines existing role ownership, not a second workflow or replacement team.
+
+## Resolve uncertainty before expanding work
+
+`plan` (requirements mode) records observable acceptance and shared business vocabulary. Inspect project
+facts first. The router routes technical uncertainty to `plan`/`build` or the relevant domain
+expert; only unresolved policy, scope or authority goes to the user. Ask the current
+decision frontier together, with alternatives and a recommendation. Do not ask a
+dependent question before its prerequisite is settled. Reuse recorded decisions;
+do not turn every continuation into another approval ceremony.
+
+## Deliver vertical, testable increments
+
+`plan` (architecture mode) and `build` choose a thin end-to-end slice that exercises the risky boundary,
+then decompose remaining work by dependency and verifiable outcome. Each slice has
+one owner, acceptance and a test seam. Do not split by arbitrary file counts or
+build every abstraction before a working behavior exists. Domain experts preserve
+business invariants; `secure` preserves security and transaction boundaries.
+
+`build` uses red-green-refactor for changed behavior: establish an intended failure,
+make the smallest correct implementation, then refactor with checks green. Read
+existing tests first. A recorded matching reproduction can establish the red step;
+do not rerun merely to manufacture ceremony. Expected results must come from the
+contract or independently derived examples, not a copy of the implementation.
+Prefer public-behavior tests; mock genuine external boundaries, not every internal
+method. Keep meaningful integration checks where mocks could hide a broken contract.
+
+## Diagnose with falsifiable hypotheses
+
+For a diagnosis request, reproduce or collect relevant evidence, form a bounded
+hypothesis, choose a discriminating check, and revise from the result. Do not make
+an unrequested fix. For an authorized fix, add the regression and verify neighboring
+behavior. An unchanged failure requires a new hypothesis/evidence, not blind retries
+or a full pipeline reset. Record environmental limits as BLOCKED, never green.
+
+## Review without overlap or overengineering
+
+`plan` (requirements mode) verifies requirement conformity; `verify` (standards axis) checks internal behavior, invariants,
+error paths and maintainability; `verify` (runtime axis) checks integration and user journeys. Link
+the same defect under one finding ID across axes. Keep independent review contexts
+and preserve dissent rather than counting duplicate findings as extra assurance.
+
+`verify` (standards axis) and `plan` (architecture mode) challenge each new abstraction: what current responsibility or
+variation requires it, and what simpler application-layer design satisfies the
+same contract? Prefer cohesive modules with small interfaces. Apply SRP by reason
+to change, not one class per line of logic. Reject speculative frameworks, empty
+pass-through layers and generic engines with no demonstrated need. Do not remove
+required authorization, transaction, audit or isolation boundaries for simplicity.
+
+## Spend context on decisions
+
+For bounded work, use one task record with linked sections: `plan` (requirements mode)'s acceptance,
+`plan` (architecture mode)'s consequential decisions, `build`'s implementation and each reviewer's evidence.
+An existing approved contract can be linked instead of rewritten. Full BRD/ADR
+documents are warranted by unresolved scope or consequential design, not phase
+labels. Sharing an artifact does not combine authorship or independent verdicts;
+serialize edits to shared files and preserve disagreements.
+
+Each verification records the finding/criterion ID, source revision or content
+hash, affected contract/dependencies, test command/environment, result and owner.
+After a fix, the finding owner rechecks it; the router routes affected boundaries to
+their reviewers. Unchanged evidence is reusable only when those inputs still match.
+Changed acceptance goes to `plan` (requirements mode); changed security/domain constraints go to their
+owners. Unknown impact requires investigation, not blanket reuse or a full reset.
+
+Keep shared terms and consequential ADRs in the confirmed record home. Load only
+the affected expert knowledge; retain the complete knowledge in the distribution.
+Send artifact deltas, evidence locations and unresolved questions, not transcripts.
+Never trim acceptance, approvals, domain constraints or UNKNOWN operations to fit
+a token budget. Measure actual usage when the host exposes it; label byte counts
+as bytes, not token savings or quality proof.
+
+Design inspiration: https://github.com/mattpocock/skills (shared vocabulary,
+decision questioning, feedback loops and deep modules). These are applied through
+Shode House's existing specialists, harness and verification ownership.

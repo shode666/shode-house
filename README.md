@@ -8,9 +8,10 @@ closes. Agents are spawned as `shode-house:<id>`; the 7 domain experts are domai
 (`references/domain/<domain>.md`) loaded by a `plan` spawn through `domain-core`, not agents. There are 20 skills
 ([ask](skills/workflow/ask/SKILL.md) is the entry), and one canonical **safety floor** is copied byte-identical into every
 agent body and the router style (`scripts/floor.py --check --require`). **Breaking:** the 18 old ids no longer resolve (no
-stub agent files) — see § Migration from 4.0.0 below; the 4.0.1 number was fixed by the maintainer. Team execution needs the
-router style, which only Claude Code applies: on Codex, Cursor and Antigravity the skills run in one session and team
-execution reports `BLOCKED: team execution needs the router style (Claude Code)`. Release notes: [CHANGELOG](CHANGELOG.md)
+stub agent files) — see § Migration from 4.0.0 below; the 4.0.1 number was fixed by the maintainer. Claude Code uses the
+router style and native registered agents. Codex structurally packages `ask` as a coordinator for genuine separate workers,
+with trusted Python-backed lifecycle hooks for direct structured writes; Cursor remains an unverified one-session adapter and Antigravity packaging
+is deferred to a separate artifact. Release notes: [CHANGELOG](CHANGELOG.md)
 4.0.1. The 4.0.1 routing and review wiring is *designed*, not yet *measured* (see § What is designed vs what is measured).
 
 4.0.0 introduced the router style and the safety floor (the 3.x `orchestrator` agent and the `oliver` style were retired
@@ -174,20 +175,25 @@ reviewers still running after 600 s before the router can integrate their verdic
 
 ### Codex
 Add the repo as a plugin marketplace (`.claude-plugin/marketplace.json` is the shared catalog);
-`plugins/shode-house/.codex-plugin/plugin.json` registers the 20 skills. Start with the `ask` skill. Skills run in one
-session (no router style on this host): agent spawns return `BLOCKED: unrouted` by design, the safety floor is in the
-`ask` skill, and the host's own approval/sandbox setting is the only enforced control for irreversible actions.
+`plugins/shode-house/plugin.json` is the portable manifest; `.codex-plugin/plugin.json` remains its compatibility fallback.
+They register the 20 skills, the `ask` onboarding coordinator and Codex-only lifecycle hooks. Start with `ask`; its
+coordinator contract requires genuine separate workers for the six roles and a fresh worker for each independent review
+axis when the installed host exposes delegation. Live installed-host acceptance is still pending. Codex must
+trust the plugin and Python 3 must be available before hooks run. Hook context reports
+`SHODE_CODEX_HOOKS=ACTIVE`, but prompt text cannot authenticate trust. Bash and per-role model/tool/scope isolation are
+always `ADVISORY-ONLY`; keep Codex approval and sandbox controls enabled.
 
 ### Cursor
 Install from this repository (`.cursor-plugin/marketplace.json` → `plugins/shode-house`).
-Skills are discovered; there is no slash command — invoke the `ask` skill. Same one-session limits as Codex
-(no router style; agent spawns return `BLOCKED: unrouted`; keep the host's approval on).
+Skills are discovered; there is no slash command — invoke the `ask` skill. Cursor has no verified router; `ask` may
+delegate only when the session exposes genuine separate-worker delegation, otherwise it reports team execution BLOCKED.
+Keep the host's approval on.
 
 ### Antigravity
-Copy or clone `plugins/shode-house` into `.agents/plugins/` (workspace) or
-`~/.gemini/config/plugins/` (global). Skills run in one session; Antigravity's validator (agy 1.2.2)
-processes the agent files, but whether agents run there is unverified; without the router style the `ask`
-skill reports `BLOCKED: team execution needs the router style (Claude Code)` instead of role-playing.
+Use `plugins/shode-house-antigravity`. It carries the portable root manifest required by Antigravity but no Codex
+manifest, OpenAI extension or hooks. Keeping it separate prevents host-specific metadata and hook payloads from leaking
+across artifacts. Generate it with `python3 scripts/pack-team.py --host antigravity --tree plugins/shode-house-antigravity`;
+check it with `python3 scripts/pack-team.py --host antigravity --check plugins/shode-house-antigravity`.
 
 ### Cowork (desktop app)
 - Drag & drop the `.plugin` file from the GitHub release → Cowork window

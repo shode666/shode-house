@@ -1,0 +1,37 @@
+---
+name: spec-axis
+description: Reference (lazy-load) ของ `review-checklist` — แกน Spec: เทียบ diff กับ spec. โหลดโดย reviewer ที่รับแกนนี้ (`plan` (requirements mode)) เท่านั้น
+---
+
+```lazy-load-contract
+LOAD: skills/discipline/review-checklist/spec-axis.md
+WHEN: review_axis=spec
+OWNER: plan
+REQUIRED-BEFORE: spec_axis_verdict
+```
+
+# Spec Axis — reference
+
+> แยกจาก `SKILL.md` v3.12.1: `verify`/`secure` preload `review-checklist` แต่ **ไม่ได้ทำแกนนี้** จึงแบกไว้เปล่า ๆ ×3
+
+> `verify` (standards axis) 7-dim + `verify` (runtime axis) 6-axis เป็น **standards ล้วน** — ตอบแค่ "code เขียนถูกหลักไหม" ไม่มีใครตอบ **"code ทำในสิ่งที่ spec ขอหรือเปล่า"**. code ที่ตามมาตรฐานครบแต่ทำผิดเรื่อง = **Standards PASS / Spec FAIL**; รายงานรวมกันเมื่อไหร่ แกนหนึ่งบังอีกแกน — นี่คือช่องที่ Anti-Puppet Gate เดิมเจาะไม่ถึง
+
+**รายงาน 3 อย่าง — quote บรรทัดของ spec ทุก finding**
+- **(a) ขาด/ทำครึ่งเดียว** — AC บอก retry 3 ครั้ง โค้ด retry ครั้งเดียว
+- **(b) scope creep** — behaviour ใน diff ที่ spec ไม่ได้ขอ (เช่นแอบใส่ caching layer) → Philosophy #4 SCOPE DRIFT
+- **(c) ดูเหมือนทำแล้วแต่ผิด** — คำนวณ VAT ก่อนหักส่วนลด ทั้งที่ spec บอกหลัง
+
+**กฎการรัน (🔴)**
+1. Spec axis กับ Standards axis (`verify` (standards axis)) **รันเป็น sub-agent คนละตัว** — ส่ง accessible diff/spec paths และ revisions; ถ้าไม่ shared filesystem ส่ง necessary source-marked excerpts ตาม harness ไม่ส่ง inaccessible path อย่างเดียว
+2. รายงานแยกหัวข้อ `## Standards` และ `## Spec` — **ห้าม merge หรือ rerank ข้ามแกน** เพราะการแยกแกนมีไว้กันการบังกันเอง
+3. ปิดท้าย 1 บรรทัด: จำนวน finding ต่อแกน + ตัวแย่สุด **ในแต่ละแกน** — ห้ามเลือกผู้ชนะข้ามแกน
+4. ไม่มี spec → ยัง dispatch Spec axis (ห้าม SKIP) แล้วคืน **`BLOCKED: no-spec`** ("no spec available") ใน report — acceptance ขาด ไม่ใช่ pass เงียบ ๆ
+5. The router records `[REVIEW DISPATCH CARD]` in the checkpoint/report: `shode-house:plan` (spec axis) = DISPATCH, always
+   (no SKIP). See `commands/review.md` § Step 1; verify the actual separate
+   assignment, not whether a ceremonial card was printed.
+
+**Routing**: approved spec ถูกแต่ implementation ขาด/ผิด/เกิน scope → Phase 2 (`build`); spec/AC เองผิดหรือขาด decision → Phase 1a (`plan`). ห้ามเปลี่ยน spec เพื่อให้ incomplete implementation ผ่าน
+
+**🛑 Stop condition** (objective-based ตาม `review-checklist` § Stop condition): (a)(b)(c) ไล่ครบทุก AC ใน scope + report เขียนแล้ว + ไม่มี blocking question → return verdict ทันที ห้ามวน re-read เพิ่ม
+
+---

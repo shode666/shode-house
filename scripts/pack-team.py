@@ -131,7 +131,7 @@ POINTER = ("No shode-house safety floor in this context (a main session without 
 # Persona-free since W2 iter 2 (A6 retires the persona). Conditional since the S2 integration (v7u.4.12, Bella W2 L1).
 # The condition names no style (UD R52, Bella S2 M-1): it is keyed on a working delegation tool, as the ask
 # skill decides ("If delegation is unavailable ..."), so it holds at S2 and S3 alike; a session without one
-# (Codex, Cursor, Antigravity; option A) reports team execution BLOCKED.
+# reports team execution BLOCKED regardless of host.
 # UD R56 (W7, with erratum 1 §5.8.2): the wrapper defers to the ask skill's decision -- delegation also needs
 # the skill not to report team execution unavailable (its style-less-session rule, fail-closed), so a session
 # with Agent but no router style gets BLOCKED from the skill and no contradicting "delegate" from here.
@@ -148,22 +148,31 @@ ASK_WRAPPER = (
 ASK_TARGET = PLUGIN_ROOT + ASK_SKILL
 
 # erratum 1 §5.8.2 (UD R37 option A). ASCII, <= 200 chars (Cowork).
-TREE_DESCRIPTION = ("Shode House: full expert team on Claude Code; skills-only, single session on "
-                    "Codex, Cursor and Antigravity.")
+TREE_DESCRIPTION = "Shode House: full expert team on Claude Code; skills-only, single session on Cursor."
+ANTIGRAVITY_DESCRIPTION = "Shode House: portable six-role software-house team for Antigravity."
+CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts, fresh review workers, "
+                     "and trusted Python-backed structured-write guards.")
 # erratum 1 §5.8.1 "HOST-NOTES" bullets, persona-free; Antigravity per W0 P4 (agy 1.2.2 validate).
 HOST_BULLETS = (
     "- Claude Code: `.claude-plugin` manifest, flat skills, agents, the authored commands (`/ask` is the "
-    "entry). Team execution (the router style delegating to specialist agents) is supported here only.\n"
-    "- Codex, Cursor, Antigravity: skills run in one session; there is no router style. Agent spawns return "
-    "`BLOCKED: unrouted` by design; never replace delegation with role-play.\n"
-    "- On those hosts the safety floor is in the `ask` skill (other shode-house skills point to it); it "
-    "applies only once loaded and can be lost when context is compacted. The only enforced control for "
-    "irreversible actions there is the host's own command-approval and sandbox setting: keep approval on "
-    "for shell and MCP actions.\n"
-    "- Manifests: `.codex-plugin` (skills), `.cursor-plugin` (skills; `ask` is a skill, no commands), root "
-    "`plugin.json` (Antigravity). Antigravity's validator (agy 1.2.2) processes the agent files and converts "
-    "the commands to skills. Whether agents run on Codex, Cursor or Antigravity, and whether their `model:` "
-    "values are honoured there, is unverified.\n"
+    "entry). The router style delegates to native registered agents.\n"
+    "- Codex: the `ask` skill coordinates genuine separate workers using the six generated role contracts. "
+    "After the user trusts the hooks and Python 3 is available, lifecycle hooks restore context after compaction "
+    "and guard direct structured writes. Hook text is not "
+    "authentication; shell commands and per-role model, tool and scope isolation stay ADVISORY-ONLY.\n"
+    "- Cursor: skills run in one session; there is no verified router. Never replace "
+    "delegation with role-play or claim independent review without a genuine separate worker.\n"
+    "- On hosts without the router style the safety floor is in the `ask` skill (other shode-house skills "
+    "point to it). Keep the host's own command approval and sandbox enabled for shell and MCP actions.\n"
+    "- Main-tree manifests: root portable `plugin.json`, `.codex-plugin` compatibility fallback and `.cursor-plugin`. "
+    "The portable manifest carries the OpenAI hook extension; Antigravity uses the separate "
+    "`plugins/shode-house-antigravity` host artifact without that extension.\n"
+)
+ANTIGRAVITY_HOST_BULLETS = (
+    "- Antigravity: portable root manifest, the same six role contracts and 20 skills. Use `ask` as the entry.\n"
+    "- This artifact excludes Codex manifests and lifecycle hooks. Skill discovery alone does not prove separate-worker "
+    "delegation; if unavailable, report team execution BLOCKED instead of role-playing workers.\n"
+    "- Keep the host's own command approval and sandbox enabled for shell and MCP actions.\n"
 )
 # Wording 3.17 shipped and W0 P4 contradicted (agy processes the agents): must never return.
 STALE_HOST_CLAIM = "Agent files are knowledge, not native registrations"
@@ -417,6 +426,22 @@ def collect(root=ROOT):
     return manifest, entries
 
 
+def codex_hook_entries(root=ROOT):
+    """Return the Codex-only hook bundle without exposing it to Claude discovery."""
+    folder = root.resolve() / "release/hosts/codex/hooks"
+    if not folder.is_dir() or folder.is_symlink():
+        raise ValueError(f"invalid Codex hook directory: {folder}")
+    entries = {}
+    for path in sorted(folder.iterdir()):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"invalid Codex hook entry: {path}")
+        entries["codex-hooks/" + path.name] = path.read_bytes()
+    expected = {"codex-hooks/hooks.json", "codex-hooks/session_context.py", "codex-hooks/pre_tool_use.py"}
+    if set(entries) != expected:
+        raise ValueError(f"Codex hook bundle differs from the pinned set: {sorted(entries)}")
+    return entries
+
+
 def roles_and_skills(source_entries):
     roles = sorted(p for p in source_entries if p.startswith("agents/") and p.endswith(".md"))
     skills = sorted(p for p in source_entries if p.endswith("/SKILL.md"))
@@ -490,8 +515,9 @@ def payload(root=ROOT):
         entries[name] = generate(name, source_entries[name], source_entries, pointer_set).encode()
     entries["commands/ask.md"] = ASK_WRAPPER
     entries["LICENSE"] = source_entries["LICENSE"]
-    # No hooks directory, root runner scripts or auto-start MCP is copied. The
-    # knowledge/reference tree remains intact, including optional project examples.
+    # Codex hooks use an explicit compatibility-manifest path, never hooks/hooks.json,
+    # so Claude's automatic hook discovery and behavior remain unchanged.
+    entries.update(codex_hook_entries(root))
     manifest = {key: manifest[key] for key in
                 ("name", "version", "author", "homepage", "repository", "license")}
     manifest.update(description=TREE_DESCRIPTION,
@@ -499,11 +525,13 @@ def payload(root=ROOT):
                     commands=sorted("./" + name for name in entries if name.startswith("commands/")))
     entries[".claude-plugin/plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
     codex = {key: manifest[key] for key in
-             ("name", "version", "description", "author", "homepage", "repository", "license")}
-    codex.update(skills="./skills/", interface={
+             ("name", "version", "author", "homepage", "repository", "license")}
+    codex.update(description=CODEX_DESCRIPTION, skills="./skills/",
+                 hooks="./codex-hooks/hooks.json",
+                 extensions={"com.openai": {"onboardingSkill": "./skills/ask/SKILL.md"}}, interface={
         "displayName": "Shode House",
         "shortDescription": "The full software-house expert team",
-        "longDescription": TREE_DESCRIPTION,
+        "longDescription": CODEX_DESCRIPTION,
         "developerName": "shode666",
         "category": "Developer Tools",
         "capabilities": ["Interactive", "Write"],
@@ -511,11 +539,27 @@ def payload(root=ROOT):
         "defaultPrompt": ["Work with the Shode House team on this project."],
     })
     entries[".codex-plugin/plugin.json"] = (json.dumps(codex, indent=2) + "\n").encode()
+    # Portable Agent Plugins manifest is canonical for current Codex. Keep the compatibility overlay above
+    # for older loaders; the root OpenAI extension is complete because it replaces, rather than merges with,
+    # the overlay's OpenAI-specific settings.
+    portable = {
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "name": manifest["name"],
+        "version": manifest["version"],
+        "description": CODEX_DESCRIPTION,
+        "skills": "./skills/",
+        "extensions": {"com.openai": {
+            "hooks": "./codex-hooks/hooks.json",
+            "onboardingSkill": "./skills/ask/SKILL.md",
+            "interface": codex["interface"],
+        }},
+    }
+    entries["plugin.json"] = (json.dumps(portable, indent=2) + "\n").encode()
     return manifest["version"], entries
 
 
 def unified_payload(root=ROOT):
-    """One tree, four host manifests. Schema layout is not execution qualification."""
+    """One Claude/Codex/Cursor tree. Antigravity needs a separate host artifact."""
     version, entries = payload(root)
     manifest = json.loads(entries[".claude-plugin/plugin.json"])
     # Agent frontmatter is kept verbatim, `model:` included (UD R13; W0 P4 confirmed on Claude Code).
@@ -524,10 +568,6 @@ def unified_payload(root=ROOT):
     # commands/ask.md uses the Claude command dialect; Cursor gets ask as a skill only.
     cursor.update(displayName="Shode House", keywords=["software-house", "agents", "skills"], commands=[])
     entries[".cursor-plugin/plugin.json"] = (json.dumps(cursor, indent=2) + "\n").encode()
-    # Antigravity marker (also the agent-plugins.org root manifest shape).
-    marker = {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-              "name": "shode-house", "version": version, "description": manifest["description"]}
-    entries["plugin.json"] = (json.dumps(marker, indent=2) + "\n").encode()
     entries["HOST-NOTES.md"] = (
         f"# Shode House {version} host notes\n\n"
         f"All {roles} role sources and 20 skills are preserved under knowledge/. The agent files, skill roots "
@@ -536,12 +576,38 @@ def unified_payload(root=ROOT):
         "`/ask` is the pinned wrapper of the ask skill. Use ask as the entry.\n\n" + HOST_BULLETS + "\n"
         "Skill discovery does not prove separate workers are available. If delegation is "
         "unavailable, report team execution BLOCKED; never replace it with role-play.\n"
-        "No automatic hooks or MCP startup are included.\n"
+        "No MCP startup is included. Codex lifecycle hooks load only through its explicit manifest.\n"
     ).encode()
     problems = audit(entries, collect(root)[1])
     if problems:
         raise ValueError("generated tree violates the packaging contract:\n  " + "\n  ".join(problems))
     return version, entries
+
+
+def antigravity_payload(root=ROOT):
+    """Host-specific portable tree without the OpenAI extension or Codex hook payload."""
+    version, entries = unified_payload(root)
+    entries = dict(entries)
+    entries.pop(".codex-plugin/plugin.json", None)
+    entries.pop(".cursor-plugin/plugin.json", None)
+    for name in [path for path in entries if path.startswith("codex-hooks/")]:
+        del entries[name]
+    marker = {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+              "name": "shode-house", "version": version, "description": ANTIGRAVITY_DESCRIPTION}
+    entries["plugin.json"] = (json.dumps(marker, indent=2) + "\n").encode()
+    entries["HOST-NOTES.md"] = (
+        f"# Shode House {version} Antigravity host notes\n\n" + ANTIGRAVITY_HOST_BULLETS + "\n"
+        "No Codex hook payload or MCP startup is included.\n"
+    ).encode()
+    return version, entries
+
+
+def payload_for_host(host, root=ROOT):
+    if host == "antigravity":
+        return antigravity_payload(root)
+    if host == "main":
+        return unified_payload(root)
+    raise ValueError(f"unsupported host: {host}")
 
 
 def _core_problems(path, core, source, name):
@@ -693,14 +759,20 @@ def audit(entries, source_entries):
     if ASK_TARGET.encode() not in wrapper or b"knowledge/" in wrapper or ASK_SKILL not in entries:
         found.append(f"commands/ask.md: must resolve to {ASK_TARGET} (the floor carrier), not a knowledge/ copy")
     # Host statements (§5.8.2) where the tree has them.
-    for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".cursor-plugin/plugin.json",
-                 "plugin.json"):
-        if name in entries and json.loads(entries[name]).get("description") != TREE_DESCRIPTION:
-            found.append(f"{name}: description is not the §5.8.2 tree description")
+    descriptions = {
+        ".claude-plugin/plugin.json": TREE_DESCRIPTION,
+        ".codex-plugin/plugin.json": CODEX_DESCRIPTION,
+        ".cursor-plugin/plugin.json": TREE_DESCRIPTION,
+    }
+    for name, expected in descriptions.items():
+        if name in entries and json.loads(entries[name]).get("description") != expected:
+            found.append(f"{name}: description is not the qualified host description")
     notes = entries.get("HOST-NOTES.md")
     if notes is not None:
         notes = notes.decode()
-        if HOST_BULLETS not in notes:
+        expected_bullets = (ANTIGRAVITY_HOST_BULLETS if ".codex-plugin/plugin.json" not in entries
+                            else HOST_BULLETS)
+        if expected_bullets not in notes:
             found.append("HOST-NOTES.md: the §5.8.1/§5.8.2 host bullets are missing or changed")
         if STALE_HOST_CLAIM in notes:
             found.append("HOST-NOTES.md: repeats the Antigravity 'skills only' claim W0 P4 contradicted")
@@ -930,7 +1002,7 @@ def destination_path(destination):
     return Path(os.path.abspath(destination))
 
 
-def write_tree(destination, root=ROOT):
+def write_tree(destination, root=ROOT, host="main"):
     """Materialize the unified tree (the in-repo plugins/shode-house source). Refused before anything is written
     or deleted: a tree path with a `..` component (S23-8), a tree that holds a symlink or is one (S21-1), a
     symlinked component between `root` and the tree (S23-2; for a relative path also in its logical $PWD spelling,
@@ -958,7 +1030,7 @@ def write_tree(destination, root=ROOT):
         raise ValueError(f"{shown}: refusing to write: not empty and not a shode-house tree (no "
                          f"{' + '.join(TREE_MARKER)} of this plugin); `--tree` deletes every file that is not a "
                          "tree entry (S23-6), so point it at an empty or new directory or an existing tree")
-    version, entries = unified_payload(root)
+    version, entries = payload_for_host(host, root)
     tree_fd = _open_destination(destination, root, create=identity is None)
     try:
         _check_opened(tree_fd, state, identity)
@@ -1007,17 +1079,23 @@ def read_tree(destination):
     return {rel: data for rel, data in found if data is not None}
 
 
-def tree_drift(destination, root=ROOT):
+def tree_drift(destination, root=ROOT, host="main"):
     """Paths whose committed tree differs from a fresh build (empty = in sync)."""
-    _, entries = unified_payload(root)
+    _, entries = payload_for_host(host, root)
     actual = read_tree(destination)
     return sorted(set(actual) ^ set(entries) | {k for k in entries if k in actual and actual[k] != entries[k]})
 
 
-def build(destination, root=ROOT):
-    version, entries = unified_payload(root)
-    destination.mkdir(parents=True, exist_ok=True)
-    output = destination / f"shode-house-v{version}-team.plugin"
+def archive_plan(destination, root=ROOT, host="main"):
+    """Return the selected archive path and bytes without creating the archive."""
+    version, entries = payload_for_host(host, root)
+    suffix = "-antigravity" if host == "antigravity" else "-team"
+    return Path(destination) / f"shode-house-v{version}{suffix}.plugin", version, entries
+
+
+def build(destination, root=ROOT, host="main"):
+    output, version, entries = archive_plan(destination, root, host)
+    Path(destination).mkdir(parents=True, exist_ok=True)
     # Exclusive creation fails safely rather than overwriting an earlier candidate.
     with output.open("xb") as stream:
         with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -1034,7 +1112,7 @@ def build(destination, root=ROOT):
             "qualification": "structural only; see CHANGELOG for live evidence"}
 
 
-def check(tree, root=ROOT):
+def check(tree, root=ROOT, host="main"):
     """`--check`: 0 = in sync and the contract holds; 1 = drift or a contract problem (one prefixed line
     each); 2 = the tree path does not exist. A source the packer cannot build, or a tree path with a `..`
     component (S23-8), raises ValueError (main: 2)."""
@@ -1042,7 +1120,7 @@ def check(tree, root=ROOT):
     if not tree.is_dir():
         print(f"error: tree not found: {shown}", file=sys.stderr)
         return 2
-    drift = tree_drift(tree, root)
+    drift = tree_drift(tree, root, host)
     problems = [f"{link}: symlink in the generated tree (S21-1: a read through it can leave the plugin)"
                 for link in tree_links(tree)]
     problems += [f"{link}: symlinked path component above the tree (S23-2: the tree is read from the link target)"
@@ -1066,16 +1144,18 @@ def main(argv=None):
     mode.add_argument("--check", type=Path, nargs="?", const=ROOT / "plugins/shode-house",
                       help="exit 1 if this tree (default plugins/shode-house) drifted from the source "
                            "or breaks the packaging contract")
+    parser.add_argument("--host", choices=("main", "antigravity"), default="main",
+                        help="generated tree variant (default: main Claude/Codex/Cursor tree)")
     args = parser.parse_args(argv)
     try:
         if args.check is not None:
-            return check(args.check)
+            return check(args.check, host=args.host)
         if args.tree is not None:
-            version, entries = write_tree(args.tree)
+            version, entries = write_tree(args.tree, host=args.host)
             print(json.dumps({"tree": str(args.tree), "version": version, "entries": len(entries)}, indent=2))
             return 0
         destination = args.out or Path(tempfile.mkdtemp(prefix="shode-team-"))
-        print(json.dumps(build(destination.resolve()), indent=2))
+        print(json.dumps(build(destination.resolve(), host=args.host), indent=2))
         return 0
     except (ValueError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)

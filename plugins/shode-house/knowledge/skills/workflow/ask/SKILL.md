@@ -40,14 +40,27 @@ source-of-truth mapping; Markdown is the fallback for every concern.
 
 ## Fast path or full workflow (single owner)
 
-**Fast path** = inspect → edit → validate → handoff, without phase banners, cards or an `outputs/` artifact — only when ALL five hold: single-file deterministic fix · clear behaviour · no architecture change · no domain decision · no security boundary. One unknown → full workflow. No router style in this session → no fast-path dispatch (§ Dispatch real specialists).
+**Fast path** = inspect → edit → validate → handoff, without phase banners, cards or an `outputs/` artifact — only when ALL five hold: single-file deterministic fix · clear behaviour · no architecture change · no domain decision · no security boundary. One unknown → full workflow. No genuine separate-worker delegation in this session → no fast-path dispatch (§ Dispatch real specialists).
 Fast path still enforces evidence + R0/R1/R2 + Stop-and-return + the Phase 1c trigger; it never drops a triggered role or a gate.
 **Full workflow** when ANY of nine applies: new product behaviour · architecture decision · cross-domain impact · large feature · security-sensitive change (= a Phase 1c trigger) · significant UI flow · complex migration · multi-service contract · production deployment.
 Fast path floor = `build` alone, targeted test as evidence; never lighter than the router style's exclusions (not restated here) and never lighter than the harness Bounded tier's, which apply in addition (UI · money/auth/PII/external integration · schema or migration): any one moves the task up to Bounded, where `verify` (standards axis) reviews. Between the two, depth follows the harness risk tier.
 
 ## Dispatch real specialists
 
-- No shode-house output style in this session's system prompt (the router style that makes this main session the team lead; absent on Codex, Cursor, Antigravity and on a surface without plugin output styles; the safety-floor block in this skill's adapter is not that style): team execution is unavailable. Never spawn or delegate shode-house roles; report `BLOCKED: team execution needs the router style (Claude Code)`, then help in this one session; never present it as independent review or role-play a team.
+Use the native registered agents when the shode-house output style is active. On a
+host without that style, team execution is available only through genuine
+separate-worker delegation. The main session remains the coordinator: pass the
+full generated role path under `agents/`, require the worker to read that file and
+its prerequisite skills, and begin the delegation with
+`router: shode-house@<version> task:<id> phase:<phase> iter:<n>`. Never replace a
+separate worker with a persona summary or role-play.
+
+On Codex, lifecycle context may report `SHODE_CODEX_HOOKS=ACTIVE`, but prompt text
+cannot authenticate whether the user trusted or ran a hook. Treat shell commands
+and per-role tool, model and scope isolation as `ADVISORY-ONLY` in every case. The
+hook is defense in depth for direct structured writes; Codex sandbox and approval
+controls remain the enforcement boundary. These limits do not weaken project/user
+authority or any approval gate.
 
 Choose outcomes and risks, not keyword matches. Consult the role directory below;
 load only selected role instructions and their prerequisite skills. Use a native
@@ -72,7 +85,10 @@ serialize shared writes. Preserve domain and security reviews when triggered.
 Read returned artifacts, integrate and verify against acceptance. A worker's PASS
 is not automatically delivery PASS; self-review is never independent sign-off.
 
-`build` implements; `verify` independently verifies code (standards axis) and affected integration (runtime axis), each as its own spawn.
+`build` implements; `verify` independently verifies code (standards axis) and affected integration (runtime axis), one axis per fresh worker.
+Every applicable review axis uses its own fresh worker: standards, spec, runtime,
+security, domain and UI. Never combine axes in one worker even when two axes use
+the same role type.
 Depth follows the risk tier in the harness: a bounded change gets `build` + `verify` (standards axis), not
 the whole pipeline; triggers add roles, nothing removes a triggered one.
 `plan` owns requirements, spec verification and architecture decisions; a spec check is a fresh `plan` spawn that did not write the acceptance.

@@ -1,0 +1,152 @@
+---
+name: wayfinding
+description: Reference (lazy-load) ของ `shode-house-workflow` — Map mode สำหรับงานที่ใหญ่เกิน 1 session และยังมองไม่เห็นทาง. โหลดเมื่อ user มาด้วยไอเดียก้อนใหญ่ที่ยังไม่รู้ว่าจะเริ่มตรงไหน
+---
+
+```lazy-load-contract
+LOAD: skills/discipline/shode-house-workflow/wayfinding.md
+WHEN: idea_has_fog=true
+OWNER: router
+REQUIRED-BEFORE: map_creation
+```
+
+# Wayfinding — Map mode (งานใหญ่เกิน 1 session, ยังมองไม่เห็นทาง)
+
+**Contents**
+
+- [ปัญหาที่มันแก้ (ช่องที่ pipeline เดิมไม่มี)](#ปัญหาที่มันแก้-ช่องที่-pipeline-เดิมไม่มี)
+- [หลักการ](#หลักการ)
+- [โครงสร้างบน tracker ที่ project ยืนยัน (Markdown fallback)](#โครงสร้างบน-tracker-ที่-project-ยืนยัน-markdown-fallback)
+- [Fog of war — แผนที่ไม่สมบูรณ์โดยตั้งใจ](#fog-of-war--แผนที่ไม่สมบูรณ์โดยตั้งใจ)
+- [Out of scope = ที่อยู่ของ Philosophy #4 (SCOPE DRIFT)](#out-of-scope--ที่อยู่ของ-philosophy-4-scope-drift)
+- [Ticket types → agent ของเรา](#ticket-types--agent-ของเรา)
+- [เรียกด้วยชื่อ ห้ามเรียกด้วยเลข](#เรียกด้วยชื่อ-ห้ามเรียกด้วยเลข)
+- [2 โหมด](#2-โหมด)
+- [จบ map แล้วไปไหนต่อ](#จบ-map-แล้วไปไหนต่อ)
+
+> Adapted จาก [mattpocock/skills · wayfinder](https://github.com/mattpocock/skills) (MIT) — port ไป tracker ที่ project ยืนยัน + PEV loop ของเรา
+> **Owner**: router (holds the map) + `plan` (discover mode) (destination + scope) · `plan` (spec/architecture tickets) · domain expert (domain decisions)
+
+## ปัญหาที่มันแก้ (ช่องที่ pipeline เดิมไม่มี)
+
+```
+ไอเดียก้อนใหญ่ที่ยังมองไม่เห็นทาง
+        ↓  ← ❌ เดิมไม่มีอะไรตรงนี้
+   Map mode (ไฟล์นี้)
+        ↓
+Phase 0 Discover → Phase 1a Spec → ... → drain
+```
+- `/design-system` สมมติว่า **รู้รูปงานแล้ว** — ผลิต spec ของ **1 bd** ไม่ใช่ของ initiative ทั้งก้อน
+- `shode-house:drain` ต้องการ item ที่ **verified + concrete + independent** อยู่แล้ว — ไม่ได้สร้าง ready set
+- ไม่มี Map → ได้ 2 ทางที่แย่ทั้งคู่: **spec ยักษ์ล่วงหน้า** (`plan` (requirements mode) เขียนทุกอย่างจากการเดา = anchoring + เขียนทิ้ง) หรือ **ค่อย ๆ ไหลไปเรื่อย ๆ** (SCOPE DRIFT ที่ไม่มีใครจับได้)
+
+## หลักการ
+
+**หาทาง ไม่ใช่พุ่งใส่ปลายทาง.** Map คือแผนที่ร่วมของ **decision ticket** — ticket ที่ผลลัพธ์คือ *การตัดสินใจ* ไม่ใช่ชิ้นงานที่ build เสร็จ. แก้ทีละใบจนกว่าทางจะชัด
+
+Map resolves decisions, not implementation acceptance. Once necessary decisions settle, the router continues the authorized pipeline; planning-only scope still stops before implementation. Unrelated open decisions need not block independent approved work.
+
+## โครงสร้างบน tracker ที่ project ยืนยัน (Markdown fallback)
+
+| ของ wayfinder | บน tracker |
+|---|---|
+| Map | create task `MAP: <destination>` (type map, priority 1) — 1 issue เป็น canonical artifact |
+| Ticket | create task `<คำถาม>` (type decision) แล้ว link map → ticket เป็น parent-child |
+| Blocking | link a blocks b — ใช้ native blocking ของ tracker เสมอ เพื่อให้ ready query คำนวณ frontier ให้เอง |
+| Claim | claim task **ก่อนเริ่มงานทุกครั้ง** — unassigned = ยังไม่มีใครจับ |
+| Frontier | find ready = open + unblocked + unclaimed |
+| Resolution | the router closes the decision ticket with reason `<คำตอบ>` (workers return the answer) + append 1 บรรทัดเข้า Decisions so far ของ map |
+
+> tracker อื่น (GitHub/Linear/Jira) → ใช้ native label + parent-child + blocking ของตัวเอง; abstraction เดิม `tracker.link(from,to,type)` ใน `shode-house-workflow` ครอบให้แล้ว
+
+### Map body (notes ของ map task)
+
+```markdown
+## Destination
+<ถึงปลายทางแล้วหน้าตาเป็นยังไง — spec ที่ส่งต่อได้ / decision ที่ล็อคแล้ว / การเปลี่ยนที่ทำเสร็จ. 1-2 บรรทัด>
+
+## Notes
+<domain · skill ที่ทุก session ต้องโหลด · engagement mode · ข้อกำหนดประจำ effort นี้>
+
+## Decisions so far
+- [<ชื่อ ticket ที่ปิดแล้ว>](<link>): <gist ของคำตอบ 1 บรรทัด>
+
+## Not yet specified
+<fog: คำถามที่รู้ว่ากำลังจะมา แต่ยังตั้งให้คมไม่ได้>
+
+## Out of scope
+<สิ่งที่ตัดออกจาก effort นี้อย่างตั้งใจ + เหตุผล + link ticket ที่ปิดไป>
+```
+
+**Map = index ไม่ใช่คลัง** — decision อยู่ที่ ticket ของมันที่เดียว; map แค่ gist + link. ห้าม list ticket ที่ยังเปิด (หาเอาจาก ready query ของ tracker)
+
+## Fog of war — แผนที่ไม่สมบูรณ์โดยตั้งใจ
+
+อย่าวาดสิ่งที่ยังมองไม่เห็น. พอปิด ticket หนึ่ง หมอกข้างหน้ามันจะจาง → **graduate** ส่วนที่คมพอแล้วเป็น ticket ใหม่ ทีละก้อน
+
+**เป็น ticket หรือเป็น fog?** เกณฑ์คือ **ตั้งคำถามให้คมได้ตอนนี้ไหม** ไม่ใช่ *ตอบได้ตอนนี้ไหม*
+- **ticket** เมื่อคำถามคมแล้ว — ถึงจะยัง blocked อยู่ก็ตาม
+- **Not yet specified** เมื่อยังตั้งคำถามให้คมไม่ได้ · **ห้ามซอย fog เป็นชิ้นขนาด ticket ล่วงหน้า** (หมอกก้อนเดียวอาจกลายเป็นหลาย ticket หรือศูนย์ ticket ก็ได้)
+
+## Out of scope = ที่อยู่ของ Philosophy #4 (SCOPE DRIFT)
+
+หมอกจับตัวเฉพาะ **ทางไปหา destination** — งานที่เลยปลายทางไปแล้ว = **out of scope** ไม่ใช่ fog
+เดิม SCOPE DRIFT เป็นกฎเฝ้าระวังที่ **ไม่มีที่ให้บันทึก** ว่า "อันนี้เราตัดออกแล้วนะ" → ตอนนี้มี
+
+Out-of-scope tickets: record exclusion and reason; cancel/defer only with tracker authority. Preserve history and other owners' work; exclusion is not successful completion.
+❌ ห้ามใส่ใน Decisions so far — นั่นคือบันทึกของ *เส้นทางที่เดินจริง* ขอบเขตที่ตัดออกไม่ใช่ก้าวหนึ่งบนเส้นทาง
+out of scope ไม่มีวัน graduate; จะกลับมาได้ต่อเมื่อ **redraw destination** ซึ่งนับเป็น effort ใหม่ ไม่ใช่การทำต่อ
+
+## Ticket types → agent ของเรา
+
+ทุก ticket เป็น **HITL** (ต้องมีคนจริงตอบ) หรือ **AFK** (agent เดินเอง) — ละเอียดกว่า Engagement Mode ที่ตั้งครั้งเดียวทั้ง engagement
+🔴 HITL ticket ปิดได้ด้วยบทสนทนาจริงเท่านั้น — **agent ห้ามตอบแทนคน** (grilling ที่ตอบคำถามตัวเองคือการโกง)
+
+| Type | HITL? | ใครรับ | ใช้เมื่อ |
+|---|---|---|---|
+| **research** | AFK | Domain expert (regulation/business) · `plan` (architecture mode) (tech/vendor) — โหลด `shode-house:shode-house-discipline` § Project Evidence Protocol, **primary source เท่านั้น** | ต้องรู้ข้อเท็จจริงนอก working directory ก่อนตัดสินใจ |
+| **prototype** | HITL | `design` (flow) · `build` (logic) — isolated throwaway per `shode-house:dev-gate`; retain artifact/verdict, commit only if authorized | Resolve behavior/design uncertainty |
+| **grilling** | HITL | the router asks the user; `plan` return questions/options through the router using `shode-house-discipline/main-session.md` | Human decision needed |
+| **task** | ทั้งคู่ | `operate` (deploy mode) (provision/access) · owner (สมัคร service, ขอสิทธิ์) | ไม่มีอะไรให้ตัดสินใจ แต่ decision ติดอยู่จนกว่างานนี้จะเสร็จ. ปิดแล้วบันทึก fact ที่ ticket หลังต้องใช้ (ที่อยู่ credential, URL ใหม่, จำนวนแถว) |
+
+## เรียกด้วยชื่อ ห้ามเรียกด้วยเลข
+
+ทุกอย่างที่ **คน** อ่าน (broadcast, Decisions so far, รายงาน) → เรียก ticket **ด้วยชื่อของมัน** ไม่ใช่ `bd:42`
+กำแพง `bd:42, bd:43, bd:44` อ่านไม่รู้เรื่อง; ชื่ออ่านปราดเดียวเข้าใจ. id/URL ไม่ได้หายไป — มันอยู่ *ข้างใน* ลิงก์ของชื่อ ไม่ใช่มาแทนชื่อ
+> The agent tag prefix (`[router|state:...|bd:42]`) keeps ids: machine metadata, not prose.
+
+## 2 โหมด
+
+Continue eligible authorized tickets with per-ticket evidence and ownership. Checkpoint before context loss; session boundaries are not a one-ticket quota. Do not invent human decisions to keep running.
+
+### A. Chart the map (user มาด้วยไอเดียก้อนใหญ่)
+
+1. **ตั้งชื่อ destination** — grill (frontier model) + สร้าง domain glossary ให้ชัดว่า map นี้กำลังไปหาอะไร. **destination ตรึง scope จึงต้องเสร็จก่อนเพื่อนเสมอ**
+2. **สำรวจ frontier แบบ breadth-first** — กวาดให้ทั่วพื้นที่ ไม่ลงลึกเส้นใดเส้นหนึ่ง; หา decision ที่เปิดอยู่ + ก้าวแรกที่ทำได้เลย
+   **No fog** → skip the map and continue the authorized pipeline; ask only for missing scope/authority.
+   **Map-mode entry criteria** — user มาด้วยไอเดียก้อนใหญ่ที่ยัง **ไม่รู้ว่าจะเริ่มตรงไหน** (ไม่ใช่ "รู้ว่าจะทำอะไร แต่ยังไม่ได้เขียน spec") → **อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)
+   **สัญญาณว่าต้องใช้ Map**: ไอเดียกินหลาย feature/ระบบ · ยังตอบไม่ได้ว่า "เสร็จ" หน้าตายังไง · มี decision ที่ต้องตัดก่อนถึงจะ spec ได้ · ก้อนใหญ่จน spec เดียวไม่พอ
+   **สัญญาณว่าไม่ต้อง**: grill รอบเดียวแล้วทางชัด → ไป `/design-system` ตรง ๆ (ข้อ 2 นี้: หยุดถ้าไม่เจอ fog)
+3. **สร้าง map** — Destination + Notes ครบ, Decisions so far ว่าง, หมอกร่างลง Not yet specified
+4. **สร้าง ticket เท่าที่ตั้งคำถามได้คม** เป็น child ของ map แล้ว **wire blocking เป็นรอบที่สอง** (issue ต้องมี id ก่อนถึงอ้างกันได้)
+5. The router dispatches concrete ready research within host capacity, parallel or sequential separate workers; record sourced results in the canonical evidence home and return accessible pointers.
+6. Collect and verify worker results before dependent decisions. Continue authorized work; checkpoint when blocked or interrupted, never abandon running workers merely because charting ended.
+
+### B. Work through the map (user มาพร้อม map id)
+
+1. อ่าน **map** อย่างเดียว (low-res) — ห้ามดึง body ของทุก ticket มากอง
+2. เลือก ticket: user ระบุมา → ใช้อันนั้น; ไม่ระบุ → ใบแรกของ frontier. **claim ก่อนแตะงาน**
+3. แก้มัน — **zoom เมื่อจำเป็น**: ดึง body ของ ticket ที่เกี่ยว/ที่ปิดแล้วเป็นราย ๆ ไป; โหลด skill ตามที่ `## Notes` สั่ง
+4. บันทึกผล: worker return คำตอบให้ the router; the router close ticket with reason `<คำตอบ>` → read it back ยืนยัน CLOSED (M8) → append 1 บรรทัดเข้า Decisions so far
+5. **graduate fog** ที่คำตอบนี้ทำให้คมพอแล้ว → สร้าง ticket ใหม่ (create-then-wire) + **ลบ patch นั้นออกจาก Not yet specified** เพื่อไม่ให้มันอยู่สองที่
+   คำตอบเผยว่า ticket ใด (ใบนี้หรือใบอื่น) อยู่เลย destination → **rule out of scope** ไม่ใช่แก้มันบนเส้นทาง
+   คำตอบล้มส่วนอื่นของแผนที่ → amend/defer affected tickets within authority, preserving history and ownership
+
+> Unblocked tickets may run in parallel sessions: **expect concurrent tracker edits**; re-read the task record before overwriting.
+
+## จบ map แล้วไปไหนต่อ
+
+ทางชัด (ไม่เหลือ decision) → destination กลายเป็น input ของ pipeline ปกติ:
+- destination = spec → `/design-system` (`plan` (requirements mode) ∥ `plan` (architecture mode)) ต่อได้ทันที เพราะรูปงานนิ่งแล้ว
+- destination = ชุดงานที่ concrete + independent → `shode-house:drain`
+- destination = decision ล้วน ๆ (เช่นเลือก platform) → close map task + บันทึกเป็น ADR (`shode-house-deliverable/adr.md` § ADR Lifecycle)

@@ -252,7 +252,7 @@ class WorkflowPermissionsAndPinsTest(unittest.TestCase):
 
 @unittest.skipUnless(gate_has("bash", "python3", "mktemp"), "needs bash + python3 + mktemp on the gate PATH")
 class DesignIntelScratchDirTest(unittest.TestCase):
-    """CI #17 run from the real tree: it only reads the repo; every file it writes goes under $TMPDIR."""
+    """CI #17 run from the real tree: its owned per-run directory lives under $TMPDIR and is removed."""
     def run17(self, tmpdir, home):
         r = subprocess.run(["bash", "-c", section(17)], cwd=ROOT, capture_output=True, text=True,
                            env={"PATH": GATE_PATH, "HOME": str(home), "TMPDIR": str(tmpdir)})
@@ -260,10 +260,14 @@ class DesignIntelScratchDirTest(unittest.TestCase):
 
     def test_smoke_runs_in_tmpdir_and_removes_its_dir(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home:
+            sentinel = pathlib.Path(tmp) / "pre-existing"
+            sentinel.write_text("keep\n")
             out = self.run17(tmp, home)
             self.assertIn("fail=0", out)
             self.assertIn("design-intel pack intact + gate runs", out)
-            self.assertEqual([], sorted(p.name for p in pathlib.Path(tmp).iterdir()), "per-run dir left behind")
+            self.assertEqual("keep\n", sentinel.read_text(), "gate changed a file it does not own")
+            self.assertEqual([], sorted(p.name for p in pathlib.Path(tmp).glob("shode-di.*")),
+                             "owned per-run dir left behind")
 
     def test_unusable_tmpdir_is_red_not_a_fallback_to_tmp(self):
         with tempfile.TemporaryDirectory() as home:

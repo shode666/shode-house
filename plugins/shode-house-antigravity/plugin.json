@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "shode-house",
+  "version": "4.0.1",
+  "description": "Shode House: portable six-role software-house team for Antigravity."
+}

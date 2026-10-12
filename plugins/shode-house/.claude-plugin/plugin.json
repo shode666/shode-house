@@ -8,7 +8,7 @@
   "homepage": "https://github.com/shode666/claude-skill-shode-house",
   "repository": "https://github.com/shode666/claude-skill-shode-house",
   "license": "MIT",
-  "description": "Shode House: full expert team on Claude Code; skills-only, single session on Codex, Cursor and Antigravity.",
+  "description": "Shode House: full expert team on Claude Code; skills-only, single session on Cursor.",
   "skills": "./skills/",
   "commands": [
     "./commands/ask.md",

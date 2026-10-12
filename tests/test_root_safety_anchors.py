@@ -311,10 +311,12 @@ class RootSafetyAnchorTest(unittest.TestCase):
                     self.assertNotRegex(rest, self.STYLE_READ, "only the router-style line may decide whether to read the style")
         self.assertGreaterEqual(seen, 12, "consult, design-system, implement, review in all three command dirs")
 
-    def test_style_less_blocked_literal_is_one_string(self):
-        """UD R73: the S3 command gate and the ask skill's style-less rule (erratum-1 §5.8.2) emit one exact literal."""
+    def test_style_less_command_stays_blocked_but_ask_uses_capability_gate(self):
+        """Commands still fail closed without their style; ask may coordinate genuine native workers."""
         literal = "`BLOCKED: team execution needs the router style (Claude Code)`"
-        self.assertIn(literal, (ROOT / "skills/workflow/ask/SKILL.md").read_text())
+        ask = (ROOT / "skills/workflow/ask/SKILL.md").read_text()
+        self.assertNotIn(literal, ask)
+        self.assertIn("If delegation is unavailable, state that team execution is unavailable", ask)
         self.assertIn(literal, self.STYLE_GATE_S3)
 
     def test_p5_reworded_lines_keep_their_stop_half(self):

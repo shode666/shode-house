@@ -1,0 +1,254 @@
+# Scope Contract — Pre-implement Gate (v2.4.1)
+
+**Contents**
+
+- [เมื่อใดต้อง post Scope Contract](#เมื่อใดต้อง-post-scope-contract)
+- [Template](#template)
+- [Field rules](#field-rules)
+- [Flow](#flow)
+- [ตัวอย่าง](#ตัวอย่าง)
+- [Enforcement](#enforcement)
+- [Catches (จาก realworld painpoint)](#catches-จาก-realworld-painpoint)
+- [Anti-puppet](#anti-puppet)
+- [ถ้า scope ต้องเปลี่ยนระหว่างทาง](#ถ้า-scope-ต้องเปลี่ยนระหว่างทาง)
+- [ถ้า scope ปิด (task done)](#ถ้า-scope-ปิด-task-done)
+- [Script-checkable enforcement (🆕 bd: shode-house-5cs.4, L2)](#script-checkable-enforcement--bd-shode-house-5cs4-l2)
+- [Enforcement ceiling (🆕 bd: shode-house-5cs.4 iter 2, "C5" — user ruling "option A")](#enforcement-ceiling--bd-shode-house-5cs4-iter-2-c5--user-ruling-option-a)
+
+> Lazy-load reference. ไม่อยู่ใน main context. Agent load เมื่อต้อง post scope ก่อน implement
+> Why: the edit-validation contradiction (validation ที่ทำให้หน้า edit save ไม่ได้เลย) + realworld pain — agent over-scope / misinterpret / overlap
+
+## เมื่อใดต้อง post Scope Contract
+
+ก่อน **implement / refactor / scaffold / fix bug / migration / config change** — agent ที่ทำงานจริง (`build`/`verify`/`operate`/`plan` in domain mode) บันทึก scope และตรวจ ownership/authorization ก่อน edit; scope ที่อนุญาตแล้วใช้ต่อได้โดยไม่ต้องขอ scope ซ้ำ และไม่ถือ silence เป็น approval; R0 ทุกครั้งยังต้องได้ confirm ของ user สำหรับ action นั้นตรง ๆ
+
+ไม่ต้อง post: research / read-only analysis / answer question / clarification
+
+## Template
+
+```
+[<agent>|state:scope|task:<id>] Scope contract
+- IN:    <≤3 bullets — สิ่งที่จะทำในรอบนี้>
+- OUT:   <≤3 bullets — สิ่งที่ไม่ทำ (กัน scope creep)>
+- Files: <paths ที่จะแก้ — agent อื่นห้าม touch จนกว่าจะปิด>
+- Stop:  <criteria ที่ทำให้ task เสร็จ>
+- Echo:  "เข้าใจว่า X เพราะ Y → จะทำ Z" (1 บรรทัด — confirm understanding)
+```
+
+## Field rules
+
+**IN/OUT** — กัน scope creep
+- IN ≤ 3 bullets, ระบุ outcome ไม่ใช่ activity ("POST /payments/create endpoint" ไม่ใช่ "เขียน code")
+- OUT ระบุสิ่งที่ user/router อาจ assume ว่าทำแต่ไม่ทำในรอบนี้ (กัน "ทำเพิ่มนิดนึง")
+
+**Files** — coordinated ownership, not a filesystem lock
+- ระบุ paths ที่จะ Write/Edit (read-only ไม่ต้อง list)
+- Glob pattern OK ถ้าชัดเจน (`src/payment/**`)
+- ระหว่างที่ contract นี้ active → agent อื่นที่ Files overlap → **block + wait**
+- file นอก Files → พัก write ของไฟล์นั้นเพื่อตรวจ ownership และบันทึก amendment; ถ้ายังอยู่ใน outcome/authority เดิมไม่ต้องขอ user อนุมัติซ้ำ
+
+**Stop** — กัน agent ทำเรื่อยเปื่อย
+- ทดสอบได้ ("smoke test pass + `verify` (standards axis) approve") ไม่ใช่ subjective ("ดีพอ")
+- ถ้าทดสอบไม่ได้ = task ยังไม่ scope พอ → re-design
+
+**Echo** — กัน misinterpretation
+- 1 บรรทัด, ภาษาคน: "เข้าใจว่า user ขอ X เพราะ Y → จะทำ Z, ไม่ทำ W"
+- ถ้า Echo ผิด = user reject ที่นี่ก่อนเริ่ม work = save token
+
+## Flow
+
+```
+1. router มอบ task → agent ทำ research/clarify ถ้ายังกำกวม
+2. agent post Scope Contract
+3. router scan active contracts:
+   a. Files overlap กับ active agent อื่น? → BLOCK, agent wait
+   b. ไม่ overlap → ผ่าน
+4. Verify existing authorization covers this scope. If not, obtain explicit approval before editing. AFK/silence never grants approval; an approved, unchanged scope is not re-approved, and each R0 action still needs the user's confirm of that exact action.
+5. Agent implement (เฉพาะ Files ที่ประกาศ)
+6. agent post "scope closed" → ปล่อย file ownership
+```
+
+## ตัวอย่าง
+
+### ตัวอย่างที่ 1 — parallel ทำงานได้
+```
+[`build`#1|state:scope|task:bd-15] Scope contract
+- IN: implement POST /payments/create endpoint
+- OUT: refactor existing /payments/list, add UI form
+- Files: src/payment/create_handler.py, tests/payment/test_create.py
+- Stop: smoke test pass + `verify` (standards axis) approve
+- Echo: เข้าใจว่าเพิ่ม endpoint ใหม่ไม่แก้ของเดิม → จะทำ POST handler + integration test
+
+[`build`#2|state:scope|task:bd-16] Scope contract
+- IN: implement POST /payments/refund endpoint
+- OUT: ไม่แตะ /create
+- Files: src/payment/refund_handler.py, tests/payment/test_refund.py
+- Stop: smoke test pass + `verify` (standards axis) approve
+- Echo: เข้าใจว่า refund แยก endpoint ไม่รวมกับ create → จะทำ POST handler + test
+```
+→ Files ไม่ overlap → parallel ได้
+
+### ตัวอย่างที่ 2 — block ที่ overlap
+```
+[`build`#3|state:scope|task:bd-17] Scope contract
+- Files: src/payment/create_handler.py  ← overlap `build`#1
+```
+→ router: BLOCK `build`#3 จนกว่า `build`#1 จะ return และ scope ของ `build`#1 ถูกปล่อย (worker ไม่ปิด task เอง; the router ปิด)
+
+### ตัวอย่างที่ 3 — Echo จับ misinterpretation
+User: "เพิ่ม validation ตรง edit ราคา"
+```
+[`build`|state:scope] Scope contract
+- IN: เพิ่ม validation `price > 0` ที่ POST /products/:id/price
+- ...
+- Echo: เข้าใจว่า user ขอ validate ค่าราคา > 0 → จะทำ validation ตรง backend
+```
+User: "ไม่ใช่ ผมหมายถึง validate ที่ frontend form"
+→ Re-scope ก่อนเริ่ม code = save token จากการ implement ผิด
+
+## Enforcement
+
+- router = enforcer หลัก (ดู § Flow ข้อ 3 และ § Script-checkable enforcement ด้านล่าง)
+- ทุก implementing agent (`build`/`verify`/`operate`/`plan` in domain mode) ต้อง compliance
+- ขัด rule = block + router แจ้ง user
+
+## Catches (จาก realworld painpoint)
+
+| Painpoint | จับโดย field |
+|-----------|--------------|
+| Scope creep — refactor เกินที่ขอ | IN/OUT |
+| Misinterpretation — ทำผิดทิศ | Echo |
+| Pace mismatch — task เล็ก response ใหญ่ | IN/OUT bullets เป็น implicit S/M/L |
+| Token waste — ทำผิดต้องทำใหม่ | Echo + IN ดักก่อน implement |
+| Agent overlap — 2 agent แก้ file เดียวกัน | Files |
+| Agent ทำเรื่อยเปื่อย ไม่จบ | Stop |
+
+## Anti-puppet
+
+- ห้าม implement โดยไม่โพสต์ Scope Contract → treated as scope drift = block
+- โพสต์ Scope Contract แต่ทำเกิน scope → block + re-scope
+- "Files" ที่ระบุไม่ครบ → พัก affected write แล้ว reconcile inventory/ownership ตาม Scope Amendment; ไม่หยุดงานอิสระที่ได้รับ authority แล้ว
+
+## ถ้า scope ต้องเปลี่ยนระหว่างทาง
+
+agent พักเฉพาะ affected write แล้วบันทึก **Scope Amendment**:
+```
+[<agent>|state:scope-amend|task:<id>] Scope amendment
+- Reason: <พบว่าต้องแก้ไฟล์เพิ่ม / requirement เปลี่ยน>
+- Add IN/OUT/Files: <delta>
+- Echo: <understand>
+```
+ถ้า amendment เป็นรายละเอียดภายใน outcome/authority เดิมและไม่ชน active ownership ให้บันทึกแล้วทำต่อ ถ้าขยาย outcome/authority หรือชน ownership ให้พักเฉพาะงานที่ขึ้นต่อ decision นั้นและขอการตัดสินที่ขาด
+
+## ถ้า scope ปิด (task done)
+
+```
+[<agent>|state:scope-closed|task:<id>] Scope closed
+- Files ปล่อย: <list>
+- Stop criteria met: <evidence>
+```
+→ router ปลด file ownership → agent อื่นต่อได้
+
+## Script-checkable enforcement (🆕 bd: shode-house-5cs.4, L2)
+
+Applicability: this section documents the separate repository script runtime, only
+for projects that explicitly adopted it and have verified its hooks are active.
+The distributed instruction-only plugin supplies neither these scripts nor hooks;
+it must not claim this enforcement or install the runtime implicitly. Without it,
+use the harness's scoped ownership, serialized writes and honest enforcement limits.
+
+ข้างบนคือ **prose protocol** (chat message + router อ่านเอง) — ชั้นที่ **script บังคับจริง** (เมื่อ SessionStart รายงาน `ENFORCED`; ดู § Enforcement ceiling)
+อยู่ที่ `scripts/scope-check.sh` (per-bd manifest `.shode-house/scope/<bd-id>.json`) +
+`hooks/scripts/guard-scope-write.sh` (PreToolUse บน `Write|Edit|Bash`). ความสัมพันธ์กับ
+`references/scope/README.md` เดิมไม่เปลี่ยน (prose ↔ script คนละชั้น ประกอบกัน ไม่ทับกัน)
+
+- **Fail-closed unclaimed path**: path ที่ไม่มีใครประกาศ owns[] → **ไม่ ALLOW เงียบๆ อีกต่อไป**
+  — ถ้าอยู่ใน `allowed_roots[]` ของ agent ที่ขอ (plan-approved boundary ตอน Scope Contract)
+  → exit 4 `NEEDS_AMENDMENT` พร้อมคำสั่ง `--amend` ที่ต้องรันเป๊ะๆ; ถ้าอยู่นอก `allowed_roots[]`
+  → exit 1 `DENY`, escalate ให้ router, **ห้าม self-amend ข้ามขอบเขตที่ plan อนุมัติไว้**
+- **`--amend`**: atomic (lock + validate + atomic-rename เหมือน `workflow-state.sh`), เติมได้
+  เฉพาะ `owns[]` — **ห้ามเติม `allowed_roots[]`** (self-amend ≠ self-expand)
+  มี time budget 3 s ต่อการเรียกเหมือน scope check ของ hook: เกิน budget → ถูกปฏิเสธ (`scope-budget`) และ manifest ไม่เปลี่ยน
+- **bind-on-claim**: agent เห็นเฉพาะ label ของตัวเอง (`build`#1`) ไม่เห็น instance id ที่ harness
+  สุ่มให้ตอน subagent spawn — agent รัน `scripts/scope-check.sh <bd> <label> --bind` เป็นก้าวแรก,
+  hook (`guard-scope-write.sh`, ADAPTER ของ platform นี้) เห็นทั้ง identity fields ของ harness
+  และคำสั่ง Bash พร้อมกัน จึงเป็นคนบันทึกจริง (7 กติกา ระบุด้วย instance_id + label เท่านั้น,
+  role/platform เป็น metadata ที่บันทึกไว้เฉยๆ ไม่เข้ากติกา: first-bind-wins, label ต้องมีอยู่ใน
+  แมนิเฟสต์แล้ว, idempotent ถ้า instance_id เดิม+label เดิม, DENY ถ้า instance_id เดิมขอ label อื่น
+  หรือ label ถูกจองแล้วโดย instance_id อื่น) — recognize เฉพาะ **canonical shape เป๊ะๆ** เท่านั้น
+  (ห้าม substring match `--bind`, reject ทันทีถ้ามี `; && || | $( ` \` ` หรือ redirect ปนอยู่ที่ไหน
+  ก็ตามในคำสั่ง)
+- **Binding record เป็น platform-neutral** (🆕 bd: shode-house-5cs.4 iter 1, "C1") — `scripts/
+  scope-check.sh` (core) **ห้ามเอ่ยชื่อ platform ใดๆ เลย** (grep-enforced test) รู้จักแค่
+  `instance_id` / `role` / `label`; เก็บ `bindings` เป็น object keyed by `instance_id` →
+  `{"platform": ..., "role": ..., "label": ...}` (lookup O(1)) แทน flat map เดิมที่ผูกกับรูปแบบ
+  ของ platform หนึ่งเดียว — การตั้งชื่อ platform (`"claude"` วันนี้) เป็นหน้าที่ของ ADAPTER
+  (`hooks/scripts/guard-scope-write.sh`) เท่านั้น ซึ่งอ่าน harness identity fields ของตัวเองแล้ว
+  normalize ก่อนส่งให้ core. แมนิเฟสต์รุ่นเก่า (`bindings` เป็น flat string) ถูก **reject ชัดเจน**
+  (exit 64 พร้อมคำแนะนำ) ทันทีที่คำสั่งฝั่ง bind แตะเข้าไป — ไม่ misread เงียบๆ; ownership check ที่
+  ไม่แตะ `bindings` เลย (`--check`/`--amend`/`--snapshot`/`--verify`) ยังใช้แมนิเฟสต์รุ่นเก่าได้ปกติ
+- **Main session ไม่ exempt + outsider policy** (🆕 bd: shode-house-5cs.4 iter 1, "C2") — เขียนจาก
+  main session เข้า path ที่อยู่ใน `owns[]`/`allowed_roots[]`/`shared_files[]` ของ agent ที่ active
+  อยู่ → DENY เหมือนกัน (ไม่งั้น scope lock ของ subagent หลบผ่าน main session ได้ตรงๆ); เขียนนอก
+  ขอบเขตที่ active → ALLOW + audit log 1 บรรทัด — **policy เดียวกันนี้ใช้กับ subagent ที่ resolve
+  ไม่ได้ด้วย**: instance_id ที่ไม่เคย bind เลยใน bd ที่ active เพียงอันเดียว หรือ bind แบบกำกวม
+  (bound ใน 0 หรือ >1 bd ที่ `in_progress` พร้อมกัน) ถือเป็น "outsider" เหมือน main session ทุก
+  ประการ — DENY ถ้า path ชนกับ scope ที่ active อยู่, ALLOW+audit ถ้าไม่ชน. ก่อนหน้านี้ agent ที่ไม่
+  bind หรือ bind กำกวม fail OPEN เงียบๆ (ช่องโหว่: agent หลบ scope ได้แค่ไม่ยอม bind) — C2 ปิดช่อง
+  นี้โดยไม่ brick agent ที่ legitimate ไม่เคย bind เลย (เช่น reviewer เขียน artifact ใต้ `outputs/`
+  ที่ไม่มีแมนิเฟสต์ไหน claim)
+- รายละเอียด exit code ทั้งหมด (0/1/2/3/4/64) + ตัวอย่างจริง → header comment ของ
+  `scripts/scope-check.sh` เอง (single source of truth)
+
+## Enforcement ceiling (🆕 bd: shode-house-5cs.4 iter 2, "C5" — user ruling "option A")
+
+**ห้าม doc นี้ implied ว่า enforce มากกว่าที่มีจริง** — ceiling ที่แท้จริงคือ:
+
+- **ทุกข้อด้านล่างถือเฉพาะเมื่อ SessionStart hook รายงาน `ENFORCED`** (jq รัน test program ได้ + `hooks/scripts/_casefold.sh`
+  โหลดได้ + บน macOS `/usr/bin/perl` กับ `Unicode::Normalize`). `ADVISORY-ONLY` = write guard **ไม่ enforce ตามที่ออกแบบ**:
+  jq ไม่อยู่บน PATH หรือ `_casefold.sh` หาย → fail-open (exit 0 + `.degraded`); jq มีแต่รันไม่ได้หรือไม่มี regex →
+  guard refuse ทุก Write/Edit/NotebookEdit (scope guard refuse Bash ด้วย); perl/NFC ใช้ไม่ได้บน macOS → Write/Edit
+  path non-ASCII ใน project ที่มี engagement ถูก refuse (collision check ทำไม่ได้). Status line = รายงาน ไม่ใช่ control;
+  `ENFORCED` ก็ยังเป็น defence in depth ไม่ใช่ guarantee (hook ถูกปิดได้ด้วย `disableAllHooks`)
+- **Write/Edit/NotebookEdit tool = hook-enforced เต็ม เฉพาะเมื่อ `ENFORCED`** (`guard-scope-write.sh`) — path
+  canonicalize (lexnorm + physical-resolve + case-fold, ปิด traversal/dot-slash/case, "C1")
+  แล้วเทียบกับ manifest ก่อนตัดสิน ALLOW/DENY/NEEDS_AMENDMENT ทุกครั้ง; symlink leaf ที่ target
+  เขียนจริงถูก refuse ทันที ไม่พยายาม resolve-แล้ว-match ("H1")
+- **Shell write (ผ่าน Bash tool) = ADVISORY เท่านั้น** — **ห้าม claim ว่า scope-enforced**
+  ยกเว้น control-plane path ชุดตายตัวข้างล่าง ซึ่ง **DENY ทันทีถ้า Bash command เอ่ยถึง** ไม่ว่าจะอ่าน
+  หรือเขียน (`deny-if-mentioned` over fixed string set — **ไม่ใช่ general write-target parser**,
+  ห้าม resolve variable/cwd-trick/shell-indirection — user ตัดสินใจแล้วว่านั่นคือ arms race ที่ไม่คุ้ม):
+  - 3 root: `.shode-house/state`, `.shode-house/journal`, `.shode-house/scope` (scope manifest /
+    binding store) — มีหรือไม่มี `/` ท้ายก็ตาม; ชื่อที่ขึ้นต้นด้วยคำเหล่านี้ (เช่น `statefoo`) ก็ DENY
+  - directory `.shode-house` เอง (เก็บทั้ง 3 root): ท้ายบรรทัด หรือตามด้วย `/`, `/.` หรืออักขระที่
+    ต่อ path ไม่ได้ (space, quote, `;`, `)`, `*` ฯลฯ)
+  - segment `..` ใดๆ หลัง `.shode-house/` ใน command เดียวกัน (เช่น `.shode-house/approval/../state`,
+    `chmod -R 0 .shode-house/approval/..`, `.shode-house/a+b/../state`, `'.shode-house/a b/../state'`,
+    `cd .shode-house/approval && chmod -R 0 ..`) — `..` segment = จุดสองตัวที่ไม่มีตัวอักษร ตัวเลข `.`
+    `_` หรือ `-` ติดอยู่ทั้งสองข้าง ไม่ว่า child ก่อนหน้าจะมี byte อะไร (space, quote, `+`, `@`, non-ASCII,
+    ขึ้นบรรทัดใหม่) หรือ `..` จะตามหลัง `/`, space, quote หรือ backslash; fail-closed แม้ปลายทางจะเป็น child
+    ที่อนุญาต และ **over-deny ที่ยอมรับแล้ว**: command ที่เอ่ย `.shode-house/<child>` แล้วใช้ `..` หลังจากนั้น
+    ด้วย (`cat .shode-house/config.yaml && cd ..`, `... src/../x`) ก็ DENY; ชื่อที่มีแค่จุด (`..x`,
+    `a..b`, `...`) ไม่ใช่ `..` segment จึงผ่าน
+  - เทียบหลังแปลงขึ้นบรรทัดใหม่เป็น space, ยุบ `//` เป็น `/` และตัด `/./`, ไม่สน ASCII case, ทั้ง
+    relative และ absolute path; child อื่น (`config.yaml`, `approval/`, `side-effects/`) และชื่อพี่น้อง
+    (`.shode-house-backup`) ยังผ่าน
+- **ขีดจำกัดที่ยอมรับแล้วของ Bash guard** (มองไม่เห็นโดย design ไม่ใช่ bug ที่เหลือ): quote splicing
+  ในชื่อ (`.sho''de-house/state`), glob/brace ในชื่อ (`.shode-house/st*`, `s[t]ate`, `st{a,}te`,
+  `.shode-hous?`), variable (`${D}se/state`), backslash escape ในชื่อ (`st\ate`), ชื่อที่ประกอบด้วย
+  `printf`/`base64`, จุดของ `..` เองที่ถูก splice หรือ escape (`.shode-house/a/.''.`,
+  `.shode-house/a/.\.`) หรือ `..` ที่มาจาก glob/brace/variable (เช่น `.shode-house/a/.{.,x}/state`), `..` ที่เขียน
+  ไว้**ก่อน**ชื่อแต่รันหลัง `cd` ใน command เดียวกัน (เช่น function body, `trap` หรือ loop:
+  `trap 'chmod -R 0 ..' EXIT; cd .shode-house/approval`), symlink ที่วางไว้ใต้ `.shode-house/`
+  (`ln -s .. .shode-house/approval/l`), relative path ใน **Bash call ถัดไป**
+  หลัง `cd .shode-house/approval` (call นั้นไม่มีชื่อ `.shode-house` ให้เห็นแล้ว) และ `git clean -fdX` / `-fdx` ซึ่งลบ `.shode-house` ที่ถูก ignore (`/init` เพิ่มลง `.gitignore`)
+  โดยไม่เอ่ยชื่อเลย
+- agent อื่นเขียนไฟล์คนอื่นผ่าน `echo >`/`cp`/`sed -i`/`tee`/heredoc นอก path ข้างบน **ยังผ่านได้**
+  (advisory only, by design, ไม่ใช่ bug ที่เหลือ)
+- `--bind` canonical shape ยังคง strict shape เดิม (metachar reject + fully-anchored regex);
+  iter 2 แก้ separator จาก `[[:space:]]+` (match `\n` ด้วย) เป็น literal space เท่านั้น
+  ("C2" — multi-line command เคยหลุดผ่านเป็น "canonical shape เป๊ะๆ" ได้)
+- Manifest ที่อ่านไม่ออก (corrupt JSON / เก่ากว่า C1 shape) → **fail-closed พร้อม audit line ที่
+  แยกออกจาก ALLOW ปกติได้** ("C3") ไม่ใช่ fail-open เงียบๆ เหมือนเดิม
+- `--amend` รับเฉพาะ concrete file path เท่านั้น (มี `* ? [ ]` → DENY ทันที, "M2") กัน
+  self-amend กลายเป็น root-wide grant ผ่าน literal glob string

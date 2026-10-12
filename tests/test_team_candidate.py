@@ -50,13 +50,7 @@ ASK_WRAPPER_PIN = "bed0181e3f85aa03c21f4212eb87a2e05aa5639150ed31356ae551f27f01a
 # UD R56: the only delegation clause of the wrapper; it defers to the ask skill's decision.
 ASK_DELEGATE = ("If this session has a working delegation tool (Agent or Task) and the ask skill does not report "
                 "team execution unavailable, delegate")
-# erratum 1 §5.8.2 (W7): the ask skill's style-less-session rule, fail-closed.
-ASK_STYLELESS_RULE = ("- No shode-house output style in this session's system prompt (the router style that makes "
-                      "this main session the team lead; absent on Codex, Cursor, Antigravity and on a surface "
-                      "without plugin output styles; the safety-floor block in this skill's adapter is not that "
-                      "style): team execution is unavailable. Never spawn or delegate shode-house roles; report "
-                      "`BLOCKED: team execution needs the router style (Claude Code)`, then help in this one "
-                      "session; never present it as independent review or role-play a team.")
+ASK_CODEX_RULE = "genuine\nseparate-worker delegation"
 EXECUTOR = ('- Design run (the delegation names a design-run order and its sha256): run only `python3 -I '
             '"${CLAUDE_PLUGIN_ROOT}/references/design-intel/scripts/design_run.py" --order <path> --sha256 <hash>`.\n')
 EXECUTOR_TREE = '"${CLAUDE_PLUGIN_ROOT}/knowledge/references/design-intel/scripts/design_run.py"'
@@ -176,14 +170,14 @@ def put_body_floor(data, inner):
 
 
 class TeamCandidateTest(unittest.TestCase):
-    def test_unified_tree_carries_all_four_host_manifests_and_same_knowledge(self):
+    def test_unified_tree_carries_three_host_manifests_and_same_knowledge(self):
         _, baseline = pack.payload()
         version, entries = pack.unified_payload()
         for path, body in baseline.items():
             if path.startswith(("knowledge/", "skills/")):
                 self.assertEqual(body, entries[path], path)
         for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
-                     ".cursor-plugin/plugin.json", "plugin.json"):
+                     ".cursor-plugin/plugin.json"):
             manifest = json.loads(entries[name])
             self.assertEqual("shode-house", manifest["name"])
             self.assertEqual(version, manifest["version"], name)
@@ -250,15 +244,18 @@ class TeamCandidateTest(unittest.TestCase):
             self.assertIn("knowledge/" + name, entries)
             self.assertEqual((ROOT / name).read_bytes(), entries["knowledge/" + name])
 
-    def test_no_automatic_runtime_hooks_or_mcp(self):
+    def test_only_codex_gets_explicit_runtime_hooks_and_no_host_gets_mcp(self):
         _, entries = pack.unified_payload()
         self.assertFalse(any(p.startswith(("hooks/", "scripts/")) for p in entries))
         for name in (".mcp.json", "mcp.json", "hooks.json", "mcp_config.json"):
             self.assertNotIn(name, entries)
-        for name in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json", ".cursor-plugin/plugin.json"):
+        codex = json.loads(entries[".codex-plugin/plugin.json"])
+        self.assertEqual("./codex-hooks/hooks.json", codex["hooks"])
+        for name in (".claude-plugin/plugin.json", ".cursor-plugin/plugin.json"):
             manifest = json.loads(entries[name])
             self.assertNotIn("hooks", manifest)
             self.assertNotIn("mcpServers", manifest)
+        self.assertNotIn("mcpServers", codex)
 
     def test_command_sources_preserved_and_every_command_registered(self):
         # Was: "...not publicly registered" -- the tree registered /ask only while the
@@ -620,35 +617,35 @@ class TeamCandidateTest(unittest.TestCase):
         self.assertIn(f"{name}:{line}: code fence never closed", str(caught.exception))
 
     # --- §5.8.2 host statements ---------------------------------------------------------------------
-    def test_host_notes_state_option_a_and_the_corrected_antigravity_line(self):
+    def test_host_notes_state_codex_adapter_and_the_corrected_antigravity_line(self):
         _, entries = pack.unified_payload()
         notes = entries["HOST-NOTES.md"].decode()
-        self.assertIn("Team execution (the router style delegating to specialist agents) is supported here only.",
-                      notes)
-        self.assertIn("Codex, Cursor, Antigravity: skills run in one session; there is no router style.", notes)
-        self.assertIn("`BLOCKED: unrouted` by design", notes)
+        self.assertIn("Codex: the `ask` skill coordinates genuine separate workers", notes)
+        self.assertIn("scope isolation stay ADVISORY-ONLY", notes)
+        self.assertIn("Cursor: skills run in one session", notes)
         self.assertIn("the safety floor is in the `ask` skill", notes)
-        self.assertIn("host's own command-approval and sandbox setting", notes)
-        self.assertIn("Antigravity's validator (agy 1.2.2) processes the agent files", notes)
+        self.assertIn("host's own command approval and sandbox", notes)
+        self.assertIn("Antigravity uses the separate `plugins/shode-house-antigravity` host artifact", notes)
         self.assertNotIn(pack.STALE_HOST_CLAIM, notes)
         self.assertNotIn("Codex: `.claude-plugin` / `.codex-plugin` manifests, flat skills, agent adapters, "
                          "the authored commands", notes)   # 3.17 claim that Codex gets the commands (unverified)
 
-    def test_tree_manifest_descriptions_state_option_a_within_cowork_limits(self):
+    def test_tree_manifest_descriptions_state_host_qualification_within_cowork_limits(self):
         _, entries = pack.unified_payload()
         for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
                      ".cursor-plugin/plugin.json", "plugin.json"):
             description = json.loads(entries[name])["description"]
-            self.assertEqual(pack.TREE_DESCRIPTION, description, name)
+            expected = pack.CODEX_DESCRIPTION if name in {".codex-plugin/plugin.json", "plugin.json"} else pack.TREE_DESCRIPTION
+            self.assertEqual(expected, description, name)
             self.assertLessEqual(len(description), 200)
             self.assertTrue(description.isascii())
         interface = json.loads(entries[".codex-plugin/plugin.json"])["interface"]
-        self.assertEqual(pack.TREE_DESCRIPTION, interface["longDescription"])
+        self.assertEqual(pack.CODEX_DESCRIPTION, interface["longDescription"])
         # persona-free (A6): the Codex card names the team, not a persona
         self.assertEqual("The full software-house expert team", interface["shortDescription"])
         self.assertEqual(["Work with the Shode House team on this project."], interface["defaultPrompt"])
         for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".cursor-plugin/plugin.json",
-                     "plugin.json", "HOST-NOTES.md", "commands/ask.md"):
+                     "HOST-NOTES.md", "commands/ask.md"):
             self.assertNotIn(b"Oliver", entries[name], name)
 
     # --- F-4 rewrite and X11 ------------------------------------------------------------------------
@@ -790,7 +787,7 @@ class TeamCandidateTest(unittest.TestCase):
         # this fails on a tree that has neither the key nor the default directory.
         _, entries = pack.unified_payload()
         for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
-                     ".cursor-plugin/plugin.json", "plugin.json"):
+                     ".cursor-plugin/plugin.json"):
             declared = json.loads(entries[name]).get("outputStyles")
             if declared is None:
                 self.assertTrue(any(path.startswith("output-styles/") for path in entries),
@@ -952,15 +949,13 @@ class PackagingContractMutationTest(unittest.TestCase):
                        "If this session has a working delegation tool (Agent or Task), delegate"):  # R56 deferral dropped
             self.red(self.edit("commands/ask.md", condition, mutant), "commands/ask.md: the /ask wrapper changed")
 
-    def test_style_less_session_with_agent_gets_blocked_from_the_skill_and_no_contradicting_delegate(self):
-        # UD R56 + erratum 1 §5.8.2: a session that has Agent but no router style. The ask skill (source and the
-        # tree adapter /ask resolves to) reports team execution unavailable and BLOCKED; the wrapper's only
-        # "delegate" sits behind the deferral to that report, and its else-branch is BLOCKED, never "delegate".
+    def test_style_less_session_requires_genuine_workers_and_never_role_plays(self):
         _, entries = pack.unified_payload()
         source_skill = (ROOT / "skills/workflow/ask/SKILL.md").read_text()
         tree_skill = entries["skills/ask/SKILL.md"].decode()
         for skill in (source_skill, tree_skill):
-            self.assertEqual(1, skill.count(ASK_STYLELESS_RULE))
+            self.assertEqual(1, skill.count(ASK_CODEX_RULE))
+            self.assertIn("ADVISORY-ONLY", skill)
         wrapper = entries["commands/ask.md"].decode()
         self.assertEqual(1, wrapper.lower().count("delegate"), "one delegation clause only")
         before, _, after = wrapper.partition("delegate specialist work")
@@ -970,14 +965,15 @@ class PackagingContractMutationTest(unittest.TestCase):
         self.assertNotIn("delegate", after.split("; otherwise", 1)[1])
 
     def test_stale_host_notes_or_description_is_red(self):
-        self.red(self.edit("HOST-NOTES.md", "Antigravity's validator (agy 1.2.2) processes the agent files",
+        self.red(self.edit("HOST-NOTES.md", "Antigravity uses the separate",
                            pack.STALE_HOST_CLAIM), "HOST-NOTES.md")
-        self.red(self.edit("HOST-NOTES.md", "No automatic", pack.STALE_HOST_CLAIM + ". No automatic"),
+        self.red(self.edit("HOST-NOTES.md", "No MCP startup", pack.STALE_HOST_CLAIM + ". No MCP startup"),
                  "Antigravity 'skills only' claim")
-        self.red(self.edit("plugin.json", "skills-only, single session", "instruction-only"), "plugin.json: description")
-        self.red(self.edit("HOST-NOTES.md", "keep approval on for shell and MCP actions", "approval is optional"),
+        self.red(self.edit(".cursor-plugin/plugin.json", "skills-only, single session", "instruction-only"),
+                 ".cursor-plugin/plugin.json: description")
+        self.red(self.edit("HOST-NOTES.md", "Keep the host's own command approval", "Host approval is optional"),
                  "host bullets are missing or changed")
-        self.red(self.edit("HOST-NOTES.md", "is supported here only.", "is supported on every host."),
+        self.red(self.edit("HOST-NOTES.md", "there is no verified router.", "there is a verified router."),
                  "host bullets are missing or changed")
 
     def test_over_rewritten_plugin_root_path_is_red(self):
@@ -1059,14 +1055,14 @@ class PackagingContractMutationTest(unittest.TestCase):
         entries = self.edit(path, "../shode-house-discipline/handoff.md", "../shode-house-discipline/nope.md")
         self.red(entries, f"{path}:{self.line_of(entries, path, 'nope.md')}: relative reference "
                           "`../shode-house-discipline/nope.md` does not resolve")
-        entries = self.edit("HOST-NOTES.md", "No automatic", "See ../outside.md. No automatic")
+        entries = self.edit("HOST-NOTES.md", "No MCP startup", "See ../outside.md. No MCP startup")
         self.red(entries, f"HOST-NOTES.md:{self.line_of(entries, 'HOST-NOTES.md', 'outside.md')}: relative "
                           "reference `../outside.md` does not resolve")
 
     def test_reference_in_fenced_code_is_not_checked_but_the_same_text_outside_is(self):
-        fenced = self.edit("HOST-NOTES.md", "No automatic", "```\ncat ../outside.md\n```\nNo automatic")
+        fenced = self.edit("HOST-NOTES.md", "No MCP startup", "```\ncat ../outside.md\n```\nNo MCP startup")
         self.assertEqual([], pack._reference_problems(fenced))
-        bare = self.edit("HOST-NOTES.md", "No automatic", "cat ../outside.md\nNo automatic")
+        bare = self.edit("HOST-NOTES.md", "No MCP startup", "cat ../outside.md\nNo MCP startup")
         self.assertEqual(1, len(pack._reference_problems(bare)))
 
     def test_unclosed_fence_in_the_tree_is_red_with_file_and_line(self):
@@ -1199,6 +1195,7 @@ def source_copy(root):
     """A copied source root (the packer's inputs and the packer itself) under `root`; -> its packer script."""
     for name in ("agents", "references", "output-styles", "commands", "skills", ".claude-plugin"):
         shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / "release/hosts/codex/hooks", root / "release/hosts/codex/hooks")
     (root / "scripts").mkdir()
     for name in ("LICENSE", "scripts/pack-team.py", "scripts/floor.py"):
         shutil.copy2(ROOT / name, root / name)
