@@ -897,7 +897,8 @@ cmd_resume() {
     correlation_failed=1
     correlation_reason="journal is empty, so state.json seq=$state_seq cannot be verified"
   elif ! correlation=$(jq -esr --arg bd "$bd" --argjson durable "$state_seq" \
-      --arg durable_phase "$cur" --slurpfile graph "$TRANSITIONS" '
+      --arg durable_phase "$cur" --slurpfile graph "$TRANSITIONS" \
+      --slurpfile durable_state "$sf" --slurpfile policies "$ERRORS_FILE" '
       to_entries
       | if all(.[ ];
           (.value | type) == "object"
@@ -926,7 +927,7 @@ cmd_resume() {
       | ($graph[0].states[0]) as $initial_phase
       | def replay($items):
           reduce $items[] as $mutation (
-            {phase: $initial_phase, valid: true};
+            {phase: $initial_phase, valid: true, statuses: {($initial_phase): "in_progress"}, retries: {}};
             if ($mutation.op == "transition") then
               .valid = (.valid
                 and $mutation.from == .phase
@@ -935,12 +936,25 @@ cmd_resume() {
                   or (($mutation.reason == "passed" or $mutation.reason == "skipped" or $mutation.reason == "failed")
                     and ($graph[0].transitions | any(.from == $mutation.from and .to == $mutation.to)))
                 ))
+              | if ($mutation.reason == "escalated") then
+                  .statuses[$mutation.from] = "escalated"
+                else
+                  .statuses[$mutation.from] = $mutation.reason
+                  | .statuses[$mutation.to] = "in_progress"
+                end
               | .phase = $mutation.to
             elif ($mutation.op == "retry") then
-              .valid = (.valid
+              ($mutation.reason
+                | try capture("^class=(?<class>[^[:space:]]+) retry_count=(?<count>[1-9][0-9]*)/(?<cap>[1-9][0-9]*)$") catch null
+              ) as $retry
+              | .valid = (.valid
                 and $mutation.from == .phase
                 and $mutation.to == .phase
-                and ($mutation.reason | test("^class=[^[:space:]]+ retry_count=[1-9][0-9]*/[1-9][0-9]*$")))
+                and $retry != null
+                and ($policies[0].policies[$retry.class].retry? | type) == "number"
+                and ($retry.cap | tonumber) == $policies[0].policies[$retry.class].retry
+                and ($retry.count | tonumber) == ((.retries[$mutation.from] // 0) + 1))
+              | if .valid then .retries[$mutation.from] = ($retry.count | tonumber) else . end
             else
               .valid = (.valid
                 and $mutation.op == "rework"
@@ -952,7 +966,16 @@ cmd_resume() {
           );
       replay($mutations) as $journal_replay
       | replay($mutations[0:$durable]) as $durable_replay
-      | if ($journal_replay.valid and $durable_replay.valid and $durable_replay.phase == $durable_phase)
+      | if ($journal_replay.valid
+          and $durable_replay.valid
+          and $durable_replay.phase == $durable_phase
+          and ([ $graph[0].states[] as $phase
+            | select(
+                ($durable_replay.statuses[$phase] // "pending") != ($durable_state[0].phases[$phase].status // "pending")
+                or ($durable_replay.retries[$phase] // 0) != ($durable_state[0].phases[$phase].retry_count // 0)
+              )
+            ] | length == 0)
+        )
         then .
         else error("accepted mutation semantics do not replay to durable state")
         end

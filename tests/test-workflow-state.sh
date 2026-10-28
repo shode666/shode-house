@@ -520,6 +520,62 @@ assert_not_contains "$resume_out" "continue phase" "semantic mismatch must not r
 rm -rf "$D"
 
 # ---------------------------------------------------------------------------
+t_start "resume: schema-valid accepted retry payload must match the durable retry count and policy class"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="same-op-retry-forgery"
+"$SCRIPT" init "$task" >/dev/null 2>&1
+"$SCRIPT" retry "$task" TRANSIENT >/dev/null 2>&1; retry_rc=$?
+sf="$D/.shode-house/state/$task.json"
+jf="$D/.shode-house/journal/$task.jsonl"
+assert_true "$retry_rc" "fixture retry must succeed before its same-operation payload is forged"
+assert_eq "$(jq -r '.phases["0-discover"].retry_count' "$sf")" "1" "durable retry count must remain the accepted first attempt"
+
+forged=$(tail -n1 "$jf" | jq -c '
+  .actor = "forged-actor"
+  | .reason = "class=FORGED retry_count=99/99"
+')
+head -n 1 "$jf" > "$D/same-op-retry-forgery.jsonl"
+printf '%s\n' "$forged" >> "$D/same-op-retry-forgery.jsonl"
+mv -f "$D/same-op-retry-forgery.jsonl" "$jf"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.seq,.bd_id,.from,.to,.op,.result] | join(":")')" "2:$task:0-discover:0-discover:retry:accept" "forged retry must preserve task, sequence, phase, operation, and accepted count"
+assert_eq "$(tail -n1 "$jf" | jq -r '.reason')" "class=FORGED retry_count=99/99" "forged retry must disagree with the durable count and configured class semantics"
+
+resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject a same-operation retry payload that disagrees with durable state and policy"
+assert_not_contains "$resume_out" "next step:" "forged retry payload must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "forged retry payload must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: schema-valid accepted transition outcome must match the durable phase status"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="same-op-transition-forgery"
+WFSTATE_ACTOR=original-session "$SCRIPT" init "$task" >/dev/null 2>&1
+WFSTATE_ACTOR=original-session "$SCRIPT" advance "$task" 1a-spec passed >/dev/null 2>&1; advance_rc=$?
+sf="$D/.shode-house/state/$task.json"
+jf="$D/.shode-house/journal/$task.jsonl"
+assert_true "$advance_rc" "fixture transition must succeed before its same-operation outcome is forged"
+assert_eq "$(jq -r '.phases["0-discover"].status' "$sf")" "passed" "durable source phase must retain the accepted transition outcome"
+
+forged=$(tail -n1 "$jf" | jq -c '
+  .actor = "forged-session"
+  | .reason = "failed"
+')
+head -n 1 "$jf" > "$D/same-op-transition-forgery.jsonl"
+printf '%s\n' "$forged" >> "$D/same-op-transition-forgery.jsonl"
+mv -f "$D/same-op-transition-forgery.jsonl" "$jf"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.seq,.bd_id,.from,.to,.op,.result] | join(":")')" "2:$task:0-discover:1a-spec:transition:accept" "forged transition must preserve task, sequence, legal edge, operation, and accepted count"
+assert_eq "$(tail -n1 "$jf" | jq -r '.reason')" "failed" "forged transition outcome must disagree with the durable passed status"
+
+resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject a same-operation transition outcome that disagrees with durable state"
+assert_not_contains "$resume_out" "next step:" "forged transition outcome must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "forged transition outcome must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"
