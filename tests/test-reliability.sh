@@ -42,6 +42,39 @@ assert_false() {
 
 sandbox() { local d; d=$(mktemp -d -t reliability-test.XXXXXX); printf '%s' "$d"; }
 
+prepare_test_ready() {
+  # Build the same authoritative independent-RED evidence required by the
+  # production 1c-security -> 2-implement gate.  Rework fixtures must first
+  # enter implementation legitimately so their later state/session provenance
+  # is meaningful.
+  local bd="$1" sf acceptance red protected acceptance_sha red_sha protected_sha tmp
+  mkdir -p "$WFSTATE_ROOT/outputs" "$WFSTATE_ROOT/tests"
+  acceptance="outputs/${bd}-acceptance.md"
+  red="outputs/${bd}-red.log"
+  protected="tests/${bd}-regression.sh"
+  printf 'current acceptance\n' > "$WFSTATE_ROOT/$acceptance"
+  printf 'assertion failure\n' > "$WFSTATE_ROOT/$red"
+  printf 'protected regression\n' > "$WFSTATE_ROOT/$protected"
+  acceptance_sha=$(shasum -a 256 "$WFSTATE_ROOT/$acceptance" | awk '{print $1}')
+  red_sha=$(shasum -a 256 "$WFSTATE_ROOT/$red" | awk '{print $1}')
+  protected_sha=$(shasum -a 256 "$WFSTATE_ROOT/$protected" | awk '{print $1}')
+  sf="$WFSTATE_ROOT/.shode-house/state/${bd}.json"
+  tmp=$(mktemp)
+  jq --arg acceptance "$acceptance" --arg acceptance_sha "$acceptance_sha" \
+    --arg red "$red" --arg red_sha "$red_sha" \
+    --arg protected "$protected" --arg protected_sha "$protected_sha" '
+      .source_revision = "fixture-source-revision"
+      | .test_ready = {
+          status: "ready",
+          test_author_lane: "test-author",
+          test_author_session: "fixture-test-author-session",
+          acceptance: {path: $acceptance, sha256: $acceptance_sha, source_revision: "fixture-source-revision"},
+          red: {kind: "assertion", path: $red, sha256: $red_sha},
+          protected_inputs: {($protected): $protected_sha}
+        }
+    ' "$sf" > "$tmp" && mv -f "$tmp" "$sf"
+}
+
 walk_to_4triage() {
   # $1 = bd-id -- fast-forward through the happy path to 4-triage, same sequence
   # test-workflow-state.sh's own "loop-1" test already exercises and asserts.
@@ -49,7 +82,8 @@ walk_to_4triage() {
   "$WF" advance "$bd" 1a-spec     >/dev/null 2>&1
   "$WF" advance "$bd" 1b-design   >/dev/null 2>&1
   "$WF" advance "$bd" 1c-security >/dev/null 2>&1
-  "$WF" advance "$bd" 2-implement >/dev/null 2>&1
+  prepare_test_ready "$bd"
+  WFSTATE_ACTOR=fixture-implementer-session "$WF" advance "$bd" 2-implement >/dev/null 2>&1
   "$WF" advance "$bd" 3a-ui-check >/dev/null 2>&1
   "$WF" advance "$bd" 3b-review   >/dev/null 2>&1
   "$WF" advance "$bd" 4-triage    >/dev/null 2>&1
