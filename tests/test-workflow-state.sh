@@ -744,6 +744,40 @@ for ownership_case in delete-both alter-both blank-both; do
 done
 
 # ---------------------------------------------------------------------------
+# Matching source/copy session values are not authoritative merely because they agree.
+# Keep the lane provenance valid so only the session-pair forgery can decide resume.
+t_start "resume: pending test-defect session-only paired forgery must fail closed"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="pending-session-only-paired-forgery"
+"$SCRIPT" init "$task" >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1c-security >/dev/null 2>&1
+prepare_test_ready "$task"
+advance_implementation "$task" 2-implement >/dev/null 2>&1
+advance_implementation "$task" 3b-review   >/dev/null 2>&1
+WFSTATE_ACTOR=triage-session "$SCRIPT" rework "$task" test-defect >/dev/null 2>&1; rework_rc=$?
+sf="$D/.shode-house/state/$task.json"
+assert_true "$rework_rc" "fixture must create a genuine pending test-defect handoff"
+assert_eq "$(jq -r '[.test_ready.test_author_lane, .test_defect.original_test_author_lane] | @json' "$sf")" \
+  '["test-author","test-author"]' \
+  "fixture must keep both test-author lanes valid"
+
+tmp=$(mktemp)
+jq '.test_ready.test_author_session = "forged-but-valid-session"
+  | .test_defect.prior_test_author_session = "forged-but-valid-session"' "$sf" > "$tmp" && mv "$tmp" "$sf"
+assert_eq "$(jq -r '[.test_ready.test_author_session, .test_defect.prior_test_author_session] | @json' "$sf")" \
+  '["forged-but-valid-session","forged-but-valid-session"]' \
+  "fixture must forge only the source/copy session pair to the same non-authoritative value"
+
+resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject session-only paired forgery"
+assert_not_contains "$resume_out" "next step:" "session-only paired forgery must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "session-only paired forgery must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"

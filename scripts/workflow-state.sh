@@ -381,6 +381,7 @@ append_journal() {
   # look at .result/.seq/.from/.to are unaffected. Task requirement: "ทั้งสามต้องแยกกันจริง
   # ในหลักฐาน -- journal ต้องบันทึกคนละ event ไม่ใช่ event เดียวกัน" -- op is that event tag.
   local bd="$1" seq="$2" ts="$3" from="$4" to="$5" actor="$6" result="$7" reason="$8" op="${9:-transition}"
+  local test_author_session="${10:-}"
   local jf; jf=$(journal_file "$bd")
   local created=0
   [ -e "$jf" ] || created=1
@@ -388,7 +389,9 @@ append_journal() {
     --argjson seq "$seq" --arg ts "$ts" --arg bd "$bd" \
     --arg from "$from" --arg to "$to" --arg actor "$actor" \
     --arg result "$result" --arg reason "$reason" --arg op "$op" \
-    '{seq:$seq, ts:$ts, bd_id:$bd, from:$from, to:$to, actor:$actor, result:$result, reason:$reason, op:$op}' \
+    --arg test_author_session "$test_author_session" \
+    '{seq:$seq, ts:$ts, bd_id:$bd, from:$from, to:$to, actor:$actor, result:$result, reason:$reason, op:$op}
+    + if $test_author_session == "" then {} else {test_author_session:$test_author_session} end' \
     >> "$jf" || return 1
   # Accepted state mutations use this as a write-ahead record.  Flush the file before
   # any caller may rename a newer state into place; when this append created the
@@ -602,7 +605,12 @@ cmd_advance() {
   # what THIS script guarantees is that the live state.json itself is never observed
   # in a partial/mixed state (AC-401a). Milestone D's `resume` subcommand is what
   # detects this exact window and reports it instead of guessing.
-  if ! append_journal "$bd" "$jseq" "$now" "$from" "$to" "$actor" "accept" "$outcome" "transition"; then
+  local accepted_test_author_session=""
+  if [ "$from" = "1c-security" ] && [ "$to" = "2-implement" ]; then
+    accepted_test_author_session=$(jq -r '.test_ready.test_author_session' "$sf")
+  fi
+  if ! append_journal "$bd" "$jseq" "$now" "$from" "$to" "$actor" "accept" "$outcome" "transition" \
+      "$accepted_test_author_session"; then
     die "advance: could not durably append accepted transition journal record -- old state kept intact"
   fi
 
@@ -932,7 +940,8 @@ cmd_resume() {
       def replay($items):
           reduce $items[] as $mutation (
             {phase: $initial_phase, valid: true, statuses: {($initial_phase): "in_progress"}, retries: {},
-              implementer_session: null, test_defect_status: null, test_author_session: null};
+              implementer_session: null, authoritative_test_author_session: null,
+              test_defect_status: null, test_author_session: null};
             if ($mutation.op == "transition") then
               .valid = (.valid
                 and $mutation.from == .phase
@@ -949,6 +958,11 @@ cmd_resume() {
                 end
               | if ($mutation.from == "1c-security" and $mutation.to == "2-implement") then
                   .implementer_session = $mutation.actor
+                  | .authoritative_test_author_session =
+                      (if ($mutation.test_author_session | valid_session_identity)
+                        then $mutation.test_author_session
+                        else null
+                      end)
                 elif ($mutation.from == "3b-review" and $mutation.to == "2-implement"
                   and $mutation.reason == "failed" and .test_defect_status == "pending") then
                   .test_defect_status = "claimed"
@@ -1014,6 +1028,9 @@ cmd_resume() {
           and ($durable_replay.test_defect_status == null
             or (($durable_state[0].test_ready.test_author_session | valid_session_identity)
               and ($durable_state[0].test_defect.prior_test_author_session | valid_session_identity)
+              and ($durable_replay.authoritative_test_author_session | valid_session_identity)
+              and $durable_state[0].test_ready.test_author_session
+                == $durable_replay.authoritative_test_author_session
               and $durable_state[0].test_defect.prior_test_author_session
                 == $durable_state[0].test_ready.test_author_session))
           and ($durable_replay.test_author_session == null
