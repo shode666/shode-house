@@ -925,7 +925,11 @@ cmd_resume() {
           )
       ] as $mutations
       | ($graph[0].states[0]) as $initial_phase
-      | def replay($items):
+      | def valid_test_author_lane:
+          type == "string" and . == "test-author";
+      def valid_session_identity:
+          if type == "string" then . != "unknown" and test("[^[:space:]]") else false end;
+      def replay($items):
           reduce $items[] as $mutation (
             {phase: $initial_phase, valid: true, statuses: {($initial_phase): "in_progress"}, retries: {},
               implementer_session: null, test_defect_status: null, test_author_session: null};
@@ -1003,11 +1007,15 @@ cmd_resume() {
           and ($durable_replay.test_defect_status == null
             or $durable_replay.test_defect_status == ($durable_state[0].test_defect.status // null))
           and ($durable_replay.test_defect_status == null
-            or ($durable_state[0].test_defect.original_test_author_lane // null)
-              == ($durable_state[0].test_ready.test_author_lane // null))
+            or (($durable_state[0].test_ready.test_author_lane | valid_test_author_lane)
+              and ($durable_state[0].test_defect.original_test_author_lane | valid_test_author_lane)
+              and $durable_state[0].test_defect.original_test_author_lane
+                == $durable_state[0].test_ready.test_author_lane))
           and ($durable_replay.test_defect_status == null
-            or ($durable_state[0].test_defect.prior_test_author_session // null)
-              == ($durable_state[0].test_ready.test_author_session // null))
+            or (($durable_state[0].test_ready.test_author_session | valid_session_identity)
+              and ($durable_state[0].test_defect.prior_test_author_session | valid_session_identity)
+              and $durable_state[0].test_defect.prior_test_author_session
+                == $durable_state[0].test_ready.test_author_session))
           and ($durable_replay.test_author_session == null
             or $durable_replay.test_author_session == ($durable_state[0].test_defect.test_author_session // null))
           and ([ $graph[0].states[] as $phase

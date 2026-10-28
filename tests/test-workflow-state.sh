@@ -692,6 +692,58 @@ for ownership_case in missing-lane altered-lane missing-prior-session altered-pr
 done
 
 # ---------------------------------------------------------------------------
+# Corrupting the source and its copied ownership provenance identically must not
+# turn an unprovable pending handoff into a valid one through equality alone.
+for ownership_case in delete-both alter-both blank-both; do
+  t_start "resume: pending test-defect ownership provenance ($ownership_case) must remain provable"
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  task="pending-paired-ownership-$ownership_case"
+  "$SCRIPT" init "$task" >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1a-spec     >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1b-design   >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1c-security >/dev/null 2>&1
+  prepare_test_ready "$task"
+  advance_implementation "$task" 2-implement >/dev/null 2>&1
+  advance_implementation "$task" 3b-review   >/dev/null 2>&1
+  WFSTATE_ACTOR=triage-session "$SCRIPT" rework "$task" test-defect >/dev/null 2>&1; rework_rc=$?
+  sf="$D/.shode-house/state/$task.json"
+  assert_true "$rework_rc" "fixture must create a genuine pending test-defect handoff"
+  assert_eq "$(jq -r '.test_defect.status' "$sf")" "pending" "fixture must remain at the pending handoff checkpoint"
+
+  tmp=$(mktemp)
+  case "$ownership_case" in
+    delete-both)
+      jq 'del(.test_ready.test_author_lane, .test_ready.test_author_session, .test_defect.original_test_author_lane, .test_defect.prior_test_author_session)' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      expected_ownership='[null,null,null,null]'
+      ;;
+    alter-both)
+      jq '.test_ready.test_author_lane = "forged-lane"
+        | .test_ready.test_author_session = "forged-session"
+        | .test_defect.original_test_author_lane = "forged-lane"
+        | .test_defect.prior_test_author_session = "forged-session"' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      expected_ownership='["forged-lane","forged-session","forged-lane","forged-session"]'
+      ;;
+    blank-both)
+      jq '.test_ready.test_author_lane = ""
+        | .test_ready.test_author_session = ""
+        | .test_defect.original_test_author_lane = ""
+        | .test_defect.prior_test_author_session = ""' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      expected_ownership='["","","",""]'
+      ;;
+  esac
+  assert_eq "$(jq -r '[.test_ready.test_author_lane, .test_ready.test_author_session, .test_defect.original_test_author_lane, .test_defect.prior_test_author_session] | @json' "$sf")" \
+    "$expected_ownership" \
+    "fixture must apply paired source/copy ownership corruption for $ownership_case"
+
+  resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+  assert_false "$resume_rc" "resume must reject pending test-defect ownership provenance that is $ownership_case"
+  assert_not_contains "$resume_out" "next step:" "paired ownership corruption must not print a continuation recommendation"
+  assert_not_contains "$resume_out" "continue phase" "paired ownership corruption must not recommend continuing the phase"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"
