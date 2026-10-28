@@ -576,6 +576,122 @@ assert_not_contains "$resume_out" "continue phase" "forged transition outcome mu
 rm -rf "$D"
 
 # ---------------------------------------------------------------------------
+t_start "resume: accepted transition actor must match durable implementer ownership"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="actor-ownership-forgery"
+"$SCRIPT" init "$task" >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance "$task" 1c-security >/dev/null 2>&1
+prepare_test_ready "$task"
+WFSTATE_ACTOR=real-implementer "$SCRIPT" advance "$task" 2-implement >/dev/null 2>&1; advance_rc=$?
+sf="$D/.shode-house/state/$task.json"
+jf="$D/.shode-house/journal/$task.jsonl"
+assert_true "$advance_rc" "fixture transition must succeed before its actor is forged"
+assert_eq "$(jq -r '.test_ready.implementer_session' "$sf")" "real-implementer" "durable ownership must retain the actual implementer session"
+
+tmp=$(mktemp)
+jq -c 'if .op == "transition" and .result == "accept" and .from == "1c-security" and .to == "2-implement" then .actor = "forged-implementer" else . end' "$jf" > "$tmp" && mv "$tmp" "$jf"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.from,.to,.op,.result,.actor] | join(":")')" "1c-security:2-implement:transition:accept:forged-implementer" "forgery must change only the accepted actor identity"
+
+resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject an accepted actor that disagrees with durable implementer ownership"
+assert_not_contains "$resume_out" "next step:" "actor ownership mismatch must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "actor ownership mismatch must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: checkpoint missing a required phase object fails closed"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="missing-required-phase"
+"$SCRIPT" init "$task" >/dev/null 2>&1
+sf="$D/.shode-house/state/$task.json"
+tmp=$(mktemp)
+jq 'del(.phases["6-operate"])' "$sf" > "$tmp" && mv "$tmp" "$sf"
+assert_eq "$(jq -r '.phases | has("6-operate")' "$sf")" "false" "fixture checkpoint must omit the required phase object"
+
+resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject a checkpoint whose closed-world phase map is incomplete"
+assert_not_contains "$resume_out" "next step:" "missing required phase must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "missing required phase must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+for identity_case in missing altered; do
+  t_start "resume: checkpoint task identity ($identity_case) must match the requested task"
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  task="state-task-identity-$identity_case"
+  "$SCRIPT" init "$task" >/dev/null 2>&1
+  sf="$D/.shode-house/state/$task.json"
+  tmp=$(mktemp)
+  if [ "$identity_case" = "missing" ]; then
+    jq 'del(.bd_id)' "$sf" > "$tmp" && mv "$tmp" "$sf"
+    assert_eq "$(jq -r 'has("bd_id")' "$sf")" "false" "fixture checkpoint must omit its task identity"
+  else
+    jq '.bd_id = "another-task"' "$sf" > "$tmp" && mv "$tmp" "$sf"
+    assert_eq "$(jq -r '.bd_id' "$sf")" "another-task" "fixture checkpoint must carry a different task identity"
+  fi
+
+  resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+  assert_false "$resume_rc" "resume must reject a checkpoint whose durable task identity is $identity_case"
+  assert_not_contains "$resume_out" "next step:" "checkpoint task identity mismatch must not print a continuation recommendation"
+  assert_not_contains "$resume_out" "continue phase" "checkpoint task identity mismatch must not recommend continuing the phase"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
+# test-defect pending state copies these two ownership values from test_ready. The
+# accepted rework record carries only the fixed handoff tag, so resume must correlate
+# the durable copies back to their durable source instead of accepting arbitrary data.
+for ownership_case in missing-lane altered-lane missing-prior-session altered-prior-session; do
+  t_start "resume: pending test-defect ownership provenance ($ownership_case) must match test_ready"
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  task="pending-ownership-$ownership_case"
+  "$SCRIPT" init "$task" >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1a-spec     >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1b-design   >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1c-security >/dev/null 2>&1
+  prepare_test_ready "$task"
+  advance_implementation "$task" 2-implement >/dev/null 2>&1
+  advance_implementation "$task" 3b-review   >/dev/null 2>&1
+  WFSTATE_ACTOR=triage-session "$SCRIPT" rework "$task" test-defect >/dev/null 2>&1; rework_rc=$?
+  sf="$D/.shode-house/state/$task.json"
+  assert_true "$rework_rc" "fixture must create a genuine pending test-defect handoff"
+  assert_eq "$(jq -r '.test_defect.status' "$sf")" "pending" "fixture must remain at the pending handoff checkpoint"
+
+  tmp=$(mktemp)
+  case "$ownership_case" in
+    missing-lane)
+      jq 'del(.test_defect.original_test_author_lane)' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      ;;
+    altered-lane)
+      jq '.test_defect.original_test_author_lane = "forged-lane"' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      ;;
+    missing-prior-session)
+      jq 'del(.test_defect.prior_test_author_session)' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      ;;
+    altered-prior-session)
+      jq '.test_defect.prior_test_author_session = "forged-prior-session"' "$sf" > "$tmp" && mv "$tmp" "$sf"
+      ;;
+  esac
+  assert_eq "$(jq -r '
+    if (.test_defect.original_test_author_lane // null) != .test_ready.test_author_lane then "mismatch"
+    elif (.test_defect.prior_test_author_session // null) != .test_ready.test_author_session then "mismatch"
+    else "match" end
+  ' "$sf")" "mismatch" "fixture must break copied test-author ownership provenance"
+
+  resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+  assert_false "$resume_rc" "resume must reject pending test-defect ownership provenance that is $ownership_case"
+  assert_not_contains "$resume_out" "next step:" "pending ownership mismatch must not print a continuation recommendation"
+  assert_not_contains "$resume_out" "continue phase" "pending ownership mismatch must not recommend continuing the phase"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"

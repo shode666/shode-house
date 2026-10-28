@@ -927,7 +927,8 @@ cmd_resume() {
       | ($graph[0].states[0]) as $initial_phase
       | def replay($items):
           reduce $items[] as $mutation (
-            {phase: $initial_phase, valid: true, statuses: {($initial_phase): "in_progress"}, retries: {}};
+            {phase: $initial_phase, valid: true, statuses: {($initial_phase): "in_progress"}, retries: {},
+              implementer_session: null, test_defect_status: null, test_author_session: null};
             if ($mutation.op == "transition") then
               .valid = (.valid
                 and $mutation.from == .phase
@@ -942,6 +943,13 @@ cmd_resume() {
                   .statuses[$mutation.from] = $mutation.reason
                   | .statuses[$mutation.to] = "in_progress"
                 end
+              | if ($mutation.from == "1c-security" and $mutation.to == "2-implement") then
+                  .implementer_session = $mutation.actor
+                elif ($mutation.from == "3b-review" and $mutation.to == "2-implement"
+                  and $mutation.reason == "failed" and .test_defect_status == "pending") then
+                  .test_defect_status = "claimed"
+                  | .test_author_session = $mutation.actor
+                else . end
               | .phase = $mutation.to
             elif ($mutation.op == "retry") then
               ($mutation.reason
@@ -962,13 +970,46 @@ cmd_resume() {
                 and $mutation.from == "3b-review"
                 and $mutation.to == "2-implement"
                 and $mutation.reason == "class=test-defect pending-test-author-handoff")
+              | if .valid then .test_defect_status = "pending" else . end
             end
           );
       replay($mutations) as $journal_replay
       | replay($mutations[0:$durable]) as $durable_replay
-      | if ($journal_replay.valid
+      | ($graph[0].states | sort) as $required_phases
+      | if ((($durable_state[0].bd_id | type) == "string")
+          and $durable_state[0].bd_id == $bd
+          and ($durable_state[0].phases | type) == "object"
+          and (($durable_state[0].phases | keys | sort) == $required_phases)
+          and ([ $required_phases[] as $phase
+            | (
+            ($durable_state[0].phases[$phase] | type) == "object"
+            and ($durable_state[0].phases[$phase] | has("status") and has("owners") and has("artifacts") and has("artifact_hashes"))
+            and ($durable_state[0].phases[$phase].status | type) == "string"
+            and ($durable_state[0].phases[$phase].owners | type) == "array"
+            and ($durable_state[0].phases[$phase].artifacts | type) == "array"
+            and ($durable_state[0].phases[$phase].artifact_hashes | type) == "object"
+            and (if ($durable_state[0].phases[$phase] | has("retry_count")) then
+                ($durable_state[0].phases[$phase].retry_count | type) == "number"
+                and $durable_state[0].phases[$phase].retry_count >= 0
+                and ($durable_state[0].phases[$phase].retry_count | floor) == $durable_state[0].phases[$phase].retry_count
+              else true end)
+            )
+          ] | all)
+          and $journal_replay.valid
           and $durable_replay.valid
           and $durable_replay.phase == $durable_phase
+          and ($durable_replay.implementer_session == null
+            or $durable_replay.implementer_session == ($durable_state[0].test_ready.implementer_session // null))
+          and ($durable_replay.test_defect_status == null
+            or $durable_replay.test_defect_status == ($durable_state[0].test_defect.status // null))
+          and ($durable_replay.test_defect_status == null
+            or ($durable_state[0].test_defect.original_test_author_lane // null)
+              == ($durable_state[0].test_ready.test_author_lane // null))
+          and ($durable_replay.test_defect_status == null
+            or ($durable_state[0].test_defect.prior_test_author_session // null)
+              == ($durable_state[0].test_ready.test_author_session // null))
+          and ($durable_replay.test_author_session == null
+            or $durable_replay.test_author_session == ($durable_state[0].test_defect.test_author_session // null))
           and ([ $graph[0].states[] as $phase
             | select(
                 ($durable_replay.statuses[$phase] // "pending") != ($durable_state[0].phases[$phase].status // "pending")
