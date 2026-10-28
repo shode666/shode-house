@@ -896,7 +896,8 @@ cmd_resume() {
   elif [ ! -s "$jf" ]; then
     correlation_failed=1
     correlation_reason="journal is empty, so state.json seq=$state_seq cannot be verified"
-  elif ! correlation=$(jq -esr --arg bd "$bd" --argjson durable "$state_seq" '
+  elif ! correlation=$(jq -esr --arg bd "$bd" --argjson durable "$state_seq" \
+      --arg durable_phase "$cur" --slurpfile graph "$TRANSITIONS" '
       to_entries
       | if all(.[ ];
           (.value | type) == "object"
@@ -922,6 +923,39 @@ cmd_resume() {
             or (.op == "rework" and .reason == "class=test-defect pending-test-author-handoff")
           )
       ] as $mutations
+      | ($graph[0].states[0]) as $initial_phase
+      | def replay($items):
+          reduce $items[] as $mutation (
+            {phase: $initial_phase, valid: true};
+            if ($mutation.op == "transition") then
+              .valid = (.valid
+                and $mutation.from == .phase
+                and (
+                  (($mutation.reason == "escalated") and ($mutation.to == $mutation.from))
+                  or (($mutation.reason == "passed" or $mutation.reason == "skipped" or $mutation.reason == "failed")
+                    and ($graph[0].transitions | any(.from == $mutation.from and .to == $mutation.to)))
+                ))
+              | .phase = $mutation.to
+            elif ($mutation.op == "retry") then
+              .valid = (.valid
+                and $mutation.from == .phase
+                and $mutation.to == .phase
+                and ($mutation.reason | test("^class=[^[:space:]]+ retry_count=[1-9][0-9]*/[1-9][0-9]*$")))
+            else
+              .valid = (.valid
+                and $mutation.op == "rework"
+                and $mutation.from == .phase
+                and $mutation.from == "3b-review"
+                and $mutation.to == "2-implement"
+                and $mutation.reason == "class=test-defect pending-test-author-handoff")
+            end
+          );
+      replay($mutations) as $journal_replay
+      | replay($mutations[0:$durable]) as $durable_replay
+      | if ($journal_replay.valid and $durable_replay.valid and $durable_replay.phase == $durable_phase)
+        then .
+        else error("accepted mutation semantics do not replay to durable state")
+        end
       | [
           ($mutations | length),
           ($mutations[$durable].op // ""),

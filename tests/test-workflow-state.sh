@@ -489,6 +489,37 @@ for journal_case in missing-required-fields wrong-bd duplicate-seq gapped-seq in
 done
 
 # ---------------------------------------------------------------------------
+t_start "resume: schema-valid accepted transition cannot substitute for the retry that mutated state"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+task="semantic-forgery"
+"$SCRIPT" init "$task" >/dev/null 2>&1
+"$SCRIPT" retry "$task" TRANSIENT >/dev/null 2>&1; retry_rc=$?
+sf="$D/.shode-house/state/$task.json"
+jf="$D/.shode-house/journal/$task.jsonl"
+assert_true "$retry_rc" "fixture retry must succeed before its accepted record is semantically forged"
+assert_eq "$(jq -r '.seq' "$sf")" "1" "semantic-forgery fixture must retain one durable retry mutation"
+
+forged=$(tail -n1 "$jf" | jq -c '
+  .from = "6-operate"
+  | .to = "0-discover"
+  | .actor = "forged-actor"
+  | .reason = "passed"
+  | .op = "transition"
+')
+head -n 1 "$jf" > "$D/semantic-forgery.jsonl"
+printf '%s\n' "$forged" >> "$D/semantic-forgery.jsonl"
+mv -f "$D/semantic-forgery.jsonl" "$jf"
+assert_eq "$(jq -sr 'length' "$jf")" "2" "forged journal must remain schema-shaped with contiguous physical records"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.seq,.bd_id,.op,.result] | join(":")')" "2:$task:transition:accept" "forged mutation must preserve task identity, sequence, and accepted count"
+
+resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject an accepted mutation whose semantics do not match the durable retry"
+assert_not_contains "$resume_out" "next step:" "semantic mismatch must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "semantic mismatch must not recommend continuing the phase"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"
