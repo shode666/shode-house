@@ -396,6 +396,13 @@ def _env_from(names, path_entries):
     return env
 
 
+def _external_env(names, path_entries, private):
+    """Build an external-tool environment whose temporary files stay runner-owned."""
+    env = _env_from(names, path_entries)
+    env["TMPDIR"] = private
+    return env
+
+
 # ----------------------------------------------------------------------------------------------
 # git (every runner git call goes through _git_call; every call after --version has the prefix)
 # ----------------------------------------------------------------------------------------------
@@ -1504,7 +1511,7 @@ def _execute(ctx, plan):
     results, statuses, created = [], {}, []
     ctx.results = results
     stop_reason = None
-    child_env = _env_from(CHILD_ENV_NAMES, ctx.path_entries)
+    child_env = _external_env(CHILD_ENV_NAMES, ctx.path_entries, ctx.private)
     child_env.update({"CI": "1", "NO_COLOR": "1"})
     for item in plan:
         rid = item["id"]
@@ -1782,9 +1789,12 @@ def _prepare(args, ctx):
     git_exe = _resolve_tool("git", ctx.path_entries, ctx.root)
     if git_exe is None:
         raise Blocked("design-run-untrusted-input", "no-git")
-    ctx.git = Git(git_exe, _env_from(GIT_ENV_NAMES, ctx.path_entries), ctx.root)
     ctx.catalogue, ctx.catalogue_sha = _load_catalogue()
     _validate_catalogue(ctx.catalogue)
+    # External tools get only runner-owned temporary storage.  This starts before git --version,
+    # because some host Git launchers write there even for that otherwise read-only probe.
+    ctx.private = _private_dir(ctx.root)
+    ctx.git = Git(git_exe, _external_env(GIT_ENV_NAMES, ctx.path_entries, ctx.private), ctx.root)
     # step 0a, 1, 2
     ctx.git_version = ctx.git.version()
     ctx.config_scan, ctx.git_dir, ctx.common_dir, ctx.deny_records = _config_scan(ctx.git, ctx.root)
@@ -1832,9 +1842,7 @@ def _prepare(args, ctx):
 
 
 def _prepare_outputs(ctx, args):
-    """Step 8. The private dir comes first, so a failure there leaves no report or run dir that
-    would block a retry (Chris W12 L-1); the report file is the last thing created."""
-    ctx.private = _private_dir(ctx.root)
+    """Step 8. The report file is the last thing created."""
     stem = os.path.basename(args.order)[:-len(".json")]
     base = os.path.join(ctx.root, "outputs", ctx.order["task"], "design-run")
     cur = ctx.root

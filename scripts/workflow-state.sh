@@ -21,7 +21,7 @@
 #   escalated -- special self-transition, see the cmd_advance comment below; not a
 #                graph edge, does not need an entry in transitions.json's "transitions"
 #
-# Deps: bash + jq + shasum (ADR-C3 -- no python3 in the hot path; shasum already used by
+# Deps: bash + jq + shasum + realpath + sync (ADR-C3 -- no python3 in the hot path; shasum already used by
 # the maintainer suite test-workflow-state.sh in iter0, so it's an established, CI-verified dependency).
 #
 # Engagement guard: every command is a no-op (exit 0, silent, no side effect) unless
@@ -75,6 +75,11 @@ die()     { log_err "$*"; exit 1; }
 engagement_active() { [ -d "$SHODE_DIR" ]; }
 
 timestamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+valid_session_identity() {
+  local identity="$1"
+  [ "$identity" != "unknown" ] && [ -n "${identity//[[:space:]]/}" ]
+}
 
 encode_bd() { printf '%s' "$1" | sed 's#/#--#g'; }
 
@@ -186,6 +191,131 @@ enter_requires_check() {
   return 0
 }
 
+# ---- shared test_ready gate: the test author records assertion-RED evidence and the
+# exact acceptance/test-side inputs it covers in the canonical state file.  The
+# implementer may enter the first implementation pass only when those files still
+# match and its session identity is distinct from the author.  This deliberately
+# validates the recorded paths at transition time: a stale state claim is not evidence.
+TEST_READY_FAIL_REASON=""
+test_ready_check() {
+  local sf="$1" actor="$2"
+  TEST_READY_FAIL_REASON=""
+
+  if ! valid_session_identity "$actor"; then
+    TEST_READY_FAIL_REASON="test_ready requires an explicit implementer session identity (set WFSTATE_ACTOR)"
+    return 1
+  fi
+
+  if ! jq -e '
+    .test_ready.status == "ready"
+    and (.test_ready.test_author_session | type == "string" and length > 0)
+    and (.test_ready.acceptance.path | type == "string" and length > 0)
+    and (.test_ready.acceptance.sha256 | type == "string" and length > 0)
+    and (.test_ready.acceptance.source_revision | type == "string" and length > 0)
+    and (.source_revision | type == "string" and length > 0)
+    and .test_ready.acceptance.source_revision == .source_revision
+    and .test_ready.red.kind == "assertion"
+    and (.test_ready.red.path | type == "string" and length > 0)
+    and (.test_ready.red.sha256 | type == "string" and length > 0)
+    and (.test_ready.protected_inputs | type == "object" and length > 0)
+    and all(.test_ready.protected_inputs[]; type == "string" and length > 0)
+  ' "$sf" >/dev/null 2>&1; then
+    TEST_READY_FAIL_REASON="test_ready is missing or incomplete (need ready status, test-author session, matching acceptance source revision/hash, assertion-RED hash, and protected input hashes)"
+    return 1
+  fi
+
+  local author; author=$(jq -r '.test_ready.test_author_session' "$sf")
+  if ! valid_session_identity "$author"; then
+    TEST_READY_FAIL_REASON="test_ready has an invalid recorded test-author session identity"
+    return 1
+  fi
+  if [ "$actor" = "$author" ]; then
+    TEST_READY_FAIL_REASON="test_ready requires a separate implementer session; actor '$actor' is the recorded test author"
+    return 1
+  fi
+
+  local path expected actual label canonical_root canonical_path
+  canonical_root=$(realpath "$ROOT" 2>/dev/null) || {
+    TEST_READY_FAIL_REASON="test_ready cannot resolve the engagement root"
+    return 1
+  }
+  while IFS=$'\t' read -r label path expected; do
+    case "$path" in
+      /*|../*|*/../*|*/..)
+        TEST_READY_FAIL_REASON="test_ready $label path must stay within the engagement root: '$path'"
+        return 1
+        ;;
+    esac
+    if [ ! -f "$ROOT/$path" ]; then
+      TEST_READY_FAIL_REASON="test_ready $label evidence is missing: '$path'"
+      return 1
+    fi
+    canonical_path=$(realpath "$ROOT/$path" 2>/dev/null) || {
+      TEST_READY_FAIL_REASON="test_ready $label evidence cannot be resolved: '$path'"
+      return 1
+    }
+    case "$canonical_path" in
+      "$canonical_root"/*) : ;;
+      *)
+        TEST_READY_FAIL_REASON="test_ready $label path resolves outside the engagement root: '$path'"
+        return 1
+        ;;
+    esac
+    actual=$(shasum -a 256 "$ROOT/$path" 2>/dev/null | awk '{print $1}')
+    if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
+      TEST_READY_FAIL_REASON="test_ready $label hash mismatch for '$path'"
+      return 1
+    fi
+  done < <(jq -r '
+    (["acceptance", .test_ready.acceptance.path, .test_ready.acceptance.sha256] | @tsv),
+    (["assertion-RED", .test_ready.red.path, .test_ready.red.sha256] | @tsv),
+    (.test_ready.protected_inputs | to_entries[] | ["protected input", .key, .value] | @tsv)
+  ' "$sf")
+
+  return 0
+}
+
+TEST_DEFECT_FAIL_REASON=""
+test_defect_claim_check() {
+  local sf="$1" actor="$2"
+  TEST_DEFECT_FAIL_REASON=""
+
+  if ! valid_session_identity "$actor"; then
+    TEST_DEFECT_FAIL_REASON="test_defect claim requires an explicit test-author session identity (set WFSTATE_ACTOR)"
+    return 1
+  fi
+  if ! jq -e '
+    .test_defect.status == "pending"
+    and (.test_defect.original_test_author_lane | type == "string" and length > 0)
+    and (.test_defect.prior_test_author_session | type == "string" and length > 0)
+    and (.test_ready.implementer_session | type == "string" and length > 0)
+  ' "$sf" >/dev/null 2>&1; then
+    TEST_DEFECT_FAIL_REASON="test_defect handoff is missing or incomplete"
+    return 1
+  fi
+
+  local implementer prior_author
+  implementer=$(jq -r '.test_ready.implementer_session' "$sf")
+  prior_author=$(jq -r '.test_defect.prior_test_author_session' "$sf")
+  if ! valid_session_identity "$implementer"; then
+    TEST_DEFECT_FAIL_REASON="test_defect handoff has an invalid recorded implementer session identity"
+    return 1
+  fi
+  if ! valid_session_identity "$prior_author"; then
+    TEST_DEFECT_FAIL_REASON="test_defect handoff has an invalid prior test-author session identity"
+    return 1
+  fi
+  if [ "$actor" = "$implementer" ]; then
+    TEST_DEFECT_FAIL_REASON="test_defect must be claimed by a test-author session, not the recorded implementer session"
+    return 1
+  fi
+  if [ "$actor" = "$prior_author" ]; then
+    TEST_DEFECT_FAIL_REASON="test_defect must be claimed by a fresh test-author session"
+    return 1
+  fi
+  return 0
+}
+
 # ---- artifact hashing: pins a sha256 per artifact path recorded on a phase, at the
 # moment that phase's status is set (any outcome). Files that don't (yet) exist on disk
 # are skipped here -- that is check 3 (artifact-path-missing)'s job, not this one's.
@@ -252,12 +382,30 @@ append_journal() {
   # ในหลักฐาน -- journal ต้องบันทึกคนละ event ไม่ใช่ event เดียวกัน" -- op is that event tag.
   local bd="$1" seq="$2" ts="$3" from="$4" to="$5" actor="$6" result="$7" reason="$8" op="${9:-transition}"
   local jf; jf=$(journal_file "$bd")
+  local created=0
+  [ -e "$jf" ] || created=1
   jq -nc \
     --argjson seq "$seq" --arg ts "$ts" --arg bd "$bd" \
     --arg from "$from" --arg to "$to" --arg actor "$actor" \
     --arg result "$result" --arg reason "$reason" --arg op "$op" \
     '{seq:$seq, ts:$ts, bd_id:$bd, from:$from, to:$to, actor:$actor, result:$result, reason:$reason, op:$op}' \
-    >> "$jf"
+    >> "$jf" || return 1
+  # Accepted state mutations use this as a write-ahead record.  Flush the file before
+  # any caller may rename a newer state into place; when this append created the
+  # journal, also flush the directory entry that makes the file discoverable.
+  sync -f "$jf" || return 1
+  if [ "$created" -eq 1 ]; then
+    sync -f "$JOURNAL_DIR" || return 1
+  fi
+}
+
+journal_appendable() {
+  local jf; jf=$(journal_file "$1")
+  if [ -e "$jf" ]; then
+    [ -f "$jf" ] && [ -w "$jf" ]
+  else
+    [ -d "$JOURNAL_DIR" ] && [ -w "$JOURNAL_DIR" ]
+  fi
 }
 
 usage() {
@@ -385,11 +533,12 @@ cmd_advance() {
   # never leave ambiguous litter around, but never touch the live state file itself.
   rm -f "$STATE_DIR/.tmp.$(encode_bd "$bd")".* 2>/dev/null || true
 
-  local from seq iter from_status
+  local from seq iter from_status actor
   from=$(jq -r '.current_phase' "$sf")
   seq=$(jq -r '.seq' "$sf")
   iter=$(jq -r '.iter' "$sf")
   from_status=$(jq -r --arg p "$from" '.phases[$p].status // "unknown"' "$sf")
+  actor="${WFSTATE_ACTOR:-${USER:-unknown}}"
 
   local ok=1 reason=""
 
@@ -423,13 +572,23 @@ cmd_advance() {
       ok=0; reason="phase '$from' is not conditional -- only phases listed in transitions.json's conditional_phases may be skipped"
     elif ! enter_requires_check "$sf" "$to" "$from" "$outcome"; then
       ok=0; reason="$ENTER_REQ_FAIL_REASON"
+    elif [ "$from" = "1c-security" ] && [ "$to" = "2-implement" ] \
+      && ! test_ready_check "$sf" "${WFSTATE_ACTOR:-}"; then
+      ok=0; reason="$TEST_READY_FAIL_REASON"
+    elif [ "$from" = "2-implement" ] \
+      && { [ "$to" = "3a-ui-check" ] || [ "$to" = "3b-review" ]; } \
+      && ! test_ready_check "$sf" "$actor"; then
+      ok=0; reason="$TEST_READY_FAIL_REASON"
+    elif [ "$from" = "3b-review" ] && [ "$to" = "2-implement" ] \
+      && [ "$outcome" = "failed" ] && [ "$(jq -r '.test_defect.status // ""' "$sf")" = "pending" ] \
+      && ! test_defect_claim_check "$sf" "${WFSTATE_ACTOR:-}"; then
+      ok=0; reason="$TEST_DEFECT_FAIL_REASON"
     fi
   fi
 
-  local jseq now actor
+  local jseq now
   jseq=$(next_journal_seq "$bd")
   now=$(timestamp)
-  actor="${WFSTATE_ACTOR:-${USER:-unknown}}"
 
   if [ "$ok" -eq 0 ]; then
     append_journal "$bd" "$jseq" "$now" "$from" "$to" "$actor" "reject" "$reason" "transition"
@@ -443,7 +602,9 @@ cmd_advance() {
   # what THIS script guarantees is that the live state.json itself is never observed
   # in a partial/mixed state (AC-401a). Milestone D's `resume` subcommand is what
   # detects this exact window and reports it instead of guessing.
-  append_journal "$bd" "$jseq" "$now" "$from" "$to" "$actor" "accept" "$outcome" "transition"
+  if ! append_journal "$bd" "$jseq" "$now" "$from" "$to" "$actor" "accept" "$outcome" "transition"; then
+    die "advance: could not durably append accepted transition journal record -- old state kept intact"
+  fi
 
   # test-only crash injection hook (never set outside the test suite)
   if [ "${WFSTATE_CRASH_BEFORE_RENAME:-0}" = "1" ]; then
@@ -481,7 +642,7 @@ cmd_advance() {
     ' "$sf" > "$tmp"
   else
     jq \
-      --arg to "$to" --arg from "$from" --arg now "$now" --arg outcome "$outcome" \
+      --arg to "$to" --arg from "$from" --arg now "$now" --arg outcome "$outcome" --arg actor "$actor" \
       --argjson seq "$((seq + 1))" --argjson iter "$new_iter" --argjson hashes "$hashes_json" '
       .current_phase = $to
       | .seq = $seq
@@ -490,6 +651,15 @@ cmd_advance() {
       | .phases[$from].artifact_hashes = ($hashes // {})
       | .phases[$to].status = "in_progress"
       | .updated_at = $now
+      | if $from == "1c-security" and $to == "2-implement" then
+          .active_lane = "implementer"
+          | .test_ready.implementer_session = $actor
+        elif $from == "3b-review" and $to == "2-implement" and $outcome == "failed"
+          and .test_defect.status == "pending" then
+          .active_lane = .test_defect.original_test_author_lane
+          | .test_defect.test_author_session = $actor
+          | .test_defect.status = "claimed"
+        else . end
     ' "$sf" > "$tmp"
   fi
 
@@ -565,9 +735,17 @@ cmd_retry() {
     mv "$tmp" "$tmp.rejected"
     die "retry: generated state failed schema validate -- old state kept intact, bad candidate at $tmp.rejected"
   fi
+
+  # Keep retry under the same checked write-ahead contract as every accepted state
+  # mutation: the audit record must be durable before the candidate can replace the
+  # live state.  In particular, a failed append must not advance state.seq and mask
+  # an earlier unresolved accepted mutation by making the counts appear balanced.
+  if ! append_journal "$bd" "$jseq" "$now" "$from" "$from" "$actor" "accept" "class=$class retry_count=$new_count/$cap" "retry"; then
+    rm -f "$tmp"
+    die "retry: could not append accepted retry journal record -- old state kept intact"
+  fi
   mv "$tmp" "$sf"
 
-  append_journal "$bd" "$jseq" "$now" "$from" "$from" "$actor" "accept" "class=$class retry_count=$new_count/$cap" "retry"
   printf 'retry: %s class=%s attempt %s/%s (phase status unchanged: %s, current_phase unchanged, iter unchanged)\n' \
     "$from" "$class" "$new_count" "$cap" "$from_status"
 }
@@ -593,6 +771,68 @@ cmd_rework() {
 
   local target; target=$(jq -r --arg c "$class" '.routes[$c] // empty' "$REWORK_FILE")
   [ -n "$target" ] || die "rework: unknown triage class '$class' (not in $REWORK_FILE routes)"
+
+  if [ "$class" = "test-defect" ]; then
+    local lockd; lockd=$(lock_dir "$bd")
+    wfstate_acquire_lock "$bd" "rework"
+    local lock_token="$WFSTATE_LOCK_TOKEN"
+    trap 'lock_release "'"$lockd"'" "'"$lock_token"'"' EXIT
+
+    local from_before lane prior_author implementer
+    from_before=$(jq -r '.current_phase' "$sf")
+    log_err "rework: class='$class' -> routing to phase '$target' (from '$from_before')"
+    [ "$from_before" = "3b-review" ] || die "rework: test-defect requires current phase '3b-review', got '$from_before'"
+
+    if jq -e '.test_defect.status == "pending"' "$sf" >/dev/null 2>&1; then
+      local pending_jseq pending_now pending_actor
+      pending_jseq=$(next_journal_seq "$bd")
+      pending_now=$(timestamp)
+      pending_actor="${WFSTATE_ACTOR:-${USER:-unknown}}"
+      append_journal "$bd" "$pending_jseq" "$pending_now" "$from_before" "$target" \
+        "$pending_actor" "reject" "class=$class unresolved pending test-author handoff" "rework"
+      die "rework: REJECTED $class -- an unresolved pending test-author handoff already exists"
+    fi
+
+    lane=$(jq -r '.test_ready.test_author_lane // empty' "$sf")
+    prior_author=$(jq -r '.test_ready.test_author_session // empty' "$sf")
+    implementer=$(jq -r '.test_ready.implementer_session // empty' "$sf")
+    [ -n "${lane//[[:space:]]/}" ] || die "rework: test-defect requires a recorded test-author lane"
+    valid_session_identity "$prior_author" || die "rework: test-defect requires a valid prior test-author session identity"
+    valid_session_identity "$implementer" || die "rework: test-defect requires a valid recorded implementer session identity"
+
+    local seq jseq now actor tmp
+    seq=$(jq -r '.seq' "$sf")
+    jseq=$(next_journal_seq "$bd")
+    now=$(timestamp)
+    actor="${WFSTATE_ACTOR:-${USER:-unknown}}"
+    tmp=$(mktemp "$STATE_DIR/.tmp.$(encode_bd "$bd").XXXXXX")
+    jq --arg lane "$lane" --arg prior "$prior_author" --arg now "$now" --argjson seq "$((seq + 1))" '
+      .test_defect = {
+        status: "pending",
+        original_test_author_lane: $lane,
+        prior_test_author_session: $prior
+      }
+      | .seq = $seq
+      | .updated_at = $now
+    ' "$sf" > "$tmp"
+    if ! jq empty "$tmp" >/dev/null 2>&1; then
+      mv "$tmp" "$tmp.rejected"
+      die "rework: generated test-defect checkpoint failed schema validate -- old state kept intact, bad candidate at $tmp.rejected"
+    fi
+    # The journal records the outbound handoff intent before the pending checkpoint
+    # is renamed into place.  resume distinguishes a completed pending handoff from
+    # this write-ahead crash window by checking the durable test_defect object.
+    if ! append_journal "$bd" "$jseq" "$now" "$from_before" "$target" "$actor" "accept" "class=$class pending-test-author-handoff" "rework"; then
+      rm -f "$tmp"
+      die "rework: could not durably append accepted test-defect journal record -- old state kept intact"
+    fi
+    if [ "${WFSTATE_CRASH_BEFORE_RENAME:-0}" = "1" ]; then
+      exit 137
+    fi
+    mv "$tmp" "$sf"
+    printf 'rework: class=%s created pending handoff from %s to %s\n' "$class" "$from_before" "$target"
+    return 0
+  fi
 
   local from_before; from_before=$(jq -r '.current_phase' "$sf")
   log_err "rework: class='$class' -> routing to phase '$target' (from '$from_before')"
@@ -633,32 +873,104 @@ cmd_resume() {
   local jf; jf=$(journal_file "$bd")
   local cur; cur=$(jq -r '.current_phase' "$sf")
 
-  # ---- torn-write detection: the journal write-ahead (ADR-C5 step 3) means a crash
-  # between the journal append and the state rename leaves the journal's LAST line
-  # claiming an accepted from->to transition that state.json's current_phase never
-  # actually picked up. That specific mismatch shape (last journal line accept,
-  # from==state.current_phase, to!=state.current_phase, to!=from) IS the torn window --
-  # anything else (clean forward transitions, a rejected last attempt, a self-transition
-  # like escalated/retry/rework-into-itself) is not.
-  local torn=0 torn_reason=""
-  if [ -f "$jf" ] && [ -s "$jf" ]; then
-    local last_result last_from last_to
-    last_result=$(tail -n1 "$jf" | jq -r '.result // ""' 2>/dev/null)
-    last_from=$(tail -n1 "$jf" | jq -r '.from // ""' 2>/dev/null)
-    last_to=$(tail -n1 "$jf" | jq -r '.to // ""' 2>/dev/null)
-    if [ "$last_result" = "accept" ] && [ "$last_from" = "$cur" ] && [ "$last_to" != "$cur" ] && [ "$last_to" != "$last_from" ]; then
-      torn=1
-      torn_reason="journal's last accepted transition says '$last_from' -> '$last_to', but state.json's current_phase is still '$cur' -- state.json was never renamed in after that journal write (crash between journal append and the atomic rename)"
-    fi
+  # ---- torn-write detection: state.seq counts durable state mutations, while the
+  # journal seq counts every audit attempt (including rejects and resume records).
+  # Correlate state.seq with only the accepted operations that mutate state instead
+  # of trusting the physical journal tail: a later rejected attempt must not hide an
+  # earlier accepted write-ahead record whose state rename never happened.
+  #
+  # transition accepts and retry accepts each advance state.seq.  The special
+  # test-defect rework accept also advances it by installing the pending checkpoint;
+  # a clean pending handoff therefore balances the count, while its journal-before-
+  # rename crash does not.  init (state.seq starts at zero), resume audit records,
+  # rejected attempts, and generic rework annotations do not mutate state.
+  local correlation_failed=0 correlation_reason="" torn=0
+  local state_seq="" correlation="" mutation_count=""
+  local unresolved_op="" unresolved_from="" unresolved_to="" unresolved_reason=""
+  if ! state_seq=$(jq -er '.seq | select(type == "number" and . >= 0 and floor == .) | tostring' "$sf" 2>/dev/null); then
+    correlation_failed=1
+    correlation_reason="state.json seq is missing or is not a non-negative integer"
+  elif [ ! -f "$jf" ]; then
+    correlation_failed=1
+    correlation_reason="journal is missing, so state.json seq=$state_seq cannot be verified"
+  elif [ ! -s "$jf" ]; then
+    correlation_failed=1
+    correlation_reason="journal is empty, so state.json seq=$state_seq cannot be verified"
+  elif ! correlation=$(jq -esr --arg bd "$bd" --argjson durable "$state_seq" '
+      to_entries
+      | if all(.[ ];
+          (.value | type) == "object"
+          and (.value | has("seq") and has("ts") and has("bd_id") and has("from") and has("to") and has("actor") and has("result") and has("reason") and has("op"))
+          and (.value.seq | type) == "number"
+          and (.value.seq | floor == .)
+          and .value.seq == (.key + 1)
+          and (.value.ts | type) == "string"
+          and (.value.bd_id | type) == "string"
+          and .value.bd_id == $bd
+          and (.value.from | type) == "string"
+          and (.value.to | type) == "string"
+          and (.value.actor | type) == "string"
+          and (.value.result | type) == "string"
+          and (.value.reason | type) == "string"
+          and (.value.op | type) == "string"
+        ) then map(.value) else error("invalid journal schema, task identity, field type, or sequence") end
+      | [ .[]
+        | select(.result == "accept")
+        | select(
+            .op == "transition"
+            or .op == "retry"
+            or (.op == "rework" and .reason == "class=test-defect pending-test-author-handoff")
+          )
+      ] as $mutations
+      | [
+          ($mutations | length),
+          ($mutations[$durable].op // ""),
+          ($mutations[$durable].from // ""),
+          ($mutations[$durable].to // ""),
+          ($mutations[$durable].reason // "")
+        ]
+      | @tsv
+    ' "$jf" 2>/dev/null); then
+    correlation_failed=1
+    correlation_reason="journal is malformed, violates the required schema/task identity/field types/contiguous sequence, or its accepted-mutation correlation cannot be parsed"
+  else
+    IFS=$'\t' read -r mutation_count unresolved_op unresolved_from unresolved_to unresolved_reason <<< "$correlation"
+
+    case "$state_seq:$mutation_count" in
+      *[!0-9:]*|:*|*:)
+        correlation_failed=1
+        correlation_reason="journal accepted-mutation count is missing or invalid"
+        ;;
+      *)
+        if [ "$mutation_count" -ne "$state_seq" ]; then
+          correlation_failed=1
+          if [ "$mutation_count" -gt "$state_seq" ]; then
+            correlation_reason="journal has an unresolved accepted state mutation op='$unresolved_op' '$unresolved_from' -> '$unresolved_to' (reason='$unresolved_reason'): journal mutation count is $mutation_count but state.json seq is $state_seq -- state.json was never renamed in after that journal write (crash between journal append and the atomic rename)"
+          else
+            correlation_reason="state.json seq is $state_seq but the journal contains only $mutation_count accepted state mutation(s) -- state is ahead of its verifiable audit history"
+          fi
+        fi
+        if [ "$mutation_count" -gt "$state_seq" ]; then
+          torn=1
+        fi
+        ;;
+    esac
   fi
 
   local jseq now actor
   jseq=$(next_journal_seq "$bd"); now=$(timestamp); actor="${WFSTATE_ACTOR:-${USER:-unknown}}"
 
-  if [ "$torn" -eq 1 ]; then
-    append_journal "$bd" "$jseq" "$now" "$cur" "$cur" "$actor" "reject" "torn write detected: $torn_reason" "resume"
-    printf 'resume: TORN WRITE DETECTED for %s\n' "$bd" >&2
-    printf '  %s\n' "$torn_reason" >&2
+  if [ "$correlation_failed" -eq 1 ]; then
+    if journal_appendable "$bd"; then
+      append_journal "$bd" "$jseq" "$now" "$cur" "$cur" "$actor" "reject" "journal/state correlation failed: $correlation_reason" "resume" \
+        || log_err "resume: correlation rejection could not be durably appended"
+    fi
+    if [ "$torn" -eq 1 ]; then
+      printf 'resume: TORN WRITE DETECTED for %s\n' "$bd" >&2
+    else
+      printf 'resume: UNVERIFIABLE CHECKPOINT for %s\n' "$bd" >&2
+    fi
+    printf '  %s\n' "$correlation_reason" >&2
     printf '  action: do NOT continue automatically -- replay/repair journal vs state manually before resuming\n' >&2
     exit 1
   fi

@@ -80,5 +80,9 @@ Log context พอ trace, level ถูก, sensitive ไม่ leak, metric/trac
 
 ## ข้อห้าม and skills
 
-Prohibitions (ห้ามผ่านโดยไม่อ่านจริง; no test for core business logic = no endorsement; destructive pen test on prod needs R0): `references/runbooks/verify-standards.md` § Prohibitions.
+Prohibitions: `references/runbooks/verify-standards.md` § Prohibitions.
+- ห้ามผ่านโดยไม่อ่านจริง.
+- No test for core business logic = no endorsement.
+- Prod destructive pen test → R0.
+
 Read frontmatter prerequisites unless already loaded in this context. Load when used: `shode-house:automate-test` · `shode-house:ui-test` (frontend/a11y; UI test code → `skills/ui/ui-test/automation-patterns.md`) · `shode-house:diagnose` (bug root cause)

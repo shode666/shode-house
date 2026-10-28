@@ -26,7 +26,7 @@ Commands (exit 0 = done; any other exit = redaction failed, the caller must stop
   redact_derived.py lockdown <out-dir>  before any run: every dir 0700, every file 0600, or refuse (see `lockdown`)
 A failure message names the file and the error type only, never file content.
 """
-import hashlib, json, os, re, stat, sys, tempfile
+import hashlib, json, os, re, stat, sys, tempfile, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evidence_redact import REDACTED, redact, redact_tree   # noqa: E402  (an import error = exit 1 = fail-closed)
@@ -148,6 +148,140 @@ def redact_file(path, name=None):
         return "unchanged"
     atomic_write(path, clean)
     return "redacted"
+
+
+BATTERY_PENDING, BATTERY_VERSION, LOGGER_OBSERVE_SECONDS = ".redact-pending.out", "4.0.1", 1.0
+
+
+def _owned_regular(st):
+    """Whether an opened battery evidence file is safe for this process to read or append."""
+    return (stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and st.st_nlink == 1
+            and stat.S_IMODE(st.st_mode) & 0o077 == 0)
+
+
+def _battery_batch_dir(path):
+    """Return the validated 4.0.1 battery dir, never enabling the fallback from a basename alone."""
+    path = os.path.abspath(path)
+    if os.path.basename(path) != BATTERY_PENDING:
+        return None
+    pending_st = os.lstat(path)
+    if not _owned_regular(pending_st):
+        return None
+    batch_dir = os.path.dirname(path)
+    batch_path = os.path.join(batch_dir, "BATCH.json")
+    try:
+        batch_st = os.lstat(batch_path)
+    except FileNotFoundError:
+        return None
+    if not _owned_regular(batch_st):
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(batch_path, flags)
+    try:
+        opened_st = os.fstat(fd)
+        if not _owned_regular(opened_st) or (opened_st.st_dev, opened_st.st_ino) != (batch_st.st_dev, batch_st.st_ino):
+            return None
+        raw = os.read(fd, (1 << 20) + 1)
+        if len(raw) > 1 << 20:
+            return None
+    finally:
+        os.close(fd)
+    try:
+        batch = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return batch_dir if isinstance(batch, dict) and batch.get("battery") == BATTERY_VERSION else None
+
+
+def _validated_log_fd(log_path, flags):
+    """Open log.txt without following a link, and validate the opened object before its caller uses it."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(log_path, flags | nofollow, 0o600)
+    try:
+        opened_st = os.fstat(fd)
+        path_st = os.lstat(log_path)
+        if (not _owned_regular(opened_st)
+                or (opened_st.st_dev, opened_st.st_ino) != (path_st.st_dev, path_st.st_ino)):
+            raise RedactionError("battery log is not an owner-only single-link regular file")
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _log_contains(log_path, needle):
+    """Search an owner-only battery log without loading the potentially long run log into memory."""
+    try:
+        fd = _validated_log_fd(log_path, os.O_RDONLY)
+    except FileNotFoundError:
+        return False
+    try:
+        carry = b""
+        while True:
+            chunk = os.read(fd, 1 << 16)
+            if not chunk:
+                return False
+            block = carry + chunk
+            if needle in block:
+                return True
+            carry = block[-(len(needle) - 1):] if len(needle) > 1 else b""
+    finally:
+        os.close(fd)
+
+
+def _append_battery_log(log_path, payload):
+    """Durably append already-redacted bytes to the validated owner-only battery log."""
+    fd = _validated_log_fd(log_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT)
+    try:
+        view = memoryview(payload)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise RedactionError("battery log append made no progress")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def persist_battery_console_if_logger_unavailable(path):
+    """Keep one durable copy if the frozen runner's logger is absent; a bounded probe preserves its sole ownership
+    when live, and a content marker makes repeated `file` calls idempotent without deleting or rewriting log data."""
+    batch_dir = _battery_batch_dir(path)
+    if batch_dir is None:
+        return
+    with open(path, "rb") as f:
+        clean = f.read()
+    identity = hashlib.sha256(clean).hexdigest()
+    st = os.stat(path, follow_symlinks=False)
+    event = (f"== battery-{BATTERY_VERSION} redacted-console dev={st.st_dev} ino={st.st_ino} "
+             f"mtime_ns={st.st_mtime_ns} sha256={identity}\n").encode("ascii")
+    log_path = os.path.join(batch_dir, "log.txt")
+    if _log_contains(log_path, event):
+        return
+
+    event_id = hashlib.sha256(event).hexdigest()
+    probe = f"== battery-{BATTERY_VERSION} logger probe event={event_id}\n".encode("ascii")
+    fallback = f"== battery-{BATTERY_VERSION} logger fallback event={event_id}\n".encode("ascii")
+    if _log_contains(log_path, probe):
+        return
+    if _log_contains(log_path, fallback):
+        _append_battery_log(log_path, event + clean)
+        return
+
+    probe_sent = True
+    try:
+        sys.stdout.buffer.write(probe)
+        sys.stdout.buffer.flush()
+    except OSError:
+        probe_sent = False   # a closed console cannot prove that the logger owns this buffer
+    if probe_sent:
+        deadline = time.monotonic() + LOGGER_OBSERVE_SECONDS
+        while time.monotonic() < deadline:
+            if _log_contains(log_path, probe):
+                return
+            time.sleep(0.01)
+    _append_battery_log(log_path, fallback + event + clean)
 
 
 def seal(run_dir):
@@ -341,6 +475,7 @@ def main(argv):
     elif len(argv) == 2 and argv[0] == "file":
         selftest()
         redact_file(argv[1], "")
+        persist_battery_console_if_logger_unavailable(argv[1])
     elif len(argv) == 1 and argv[0] == "text":
         selftest()
         sys.stdout.buffer.write(redact_text(sys.stdin.buffer.read()))

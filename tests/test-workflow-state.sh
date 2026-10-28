@@ -38,6 +38,10 @@ assert_contains() {
   # assert_contains <haystack> <needle> <msg>
   case "$1" in *"$2"*) t_ok ;; *) t_fail "$3 -- '$1' does not contain '$2'" ;; esac
 }
+assert_not_contains() {
+  # assert_not_contains <haystack> <needle> <msg>
+  case "$1" in *"$2"*) t_fail "$3 -- '$1' contains '$2'" ;; *) t_ok ;; esac
+}
 assert_true() {
   # assert_true <exit-code> <msg>
   if [ "$1" -eq 0 ]; then t_ok; else t_fail "$2 -- exit code $1"; fi
@@ -50,6 +54,41 @@ assert_false() {
 sandbox() {
   local d; d=$(mktemp -d -t wfstate-test.XXXXXX)
   printf '%s' "$d"
+}
+
+# Arrange the shared evidence required before a distinct implementer may enter
+# 2-implement. Tests that exercise a missing/invalid gate build their own state.
+prepare_test_ready() {
+  local task="$1" sf acceptance red protected acceptance_sha red_sha protected_sha tmp
+  mkdir -p "$WFSTATE_ROOT/outputs" "$WFSTATE_ROOT/tests"
+  acceptance="outputs/${task}-acceptance.md"
+  red="outputs/${task}-red.log"
+  protected="tests/${task}-regression.sh"
+  printf 'current acceptance\n' > "$WFSTATE_ROOT/$acceptance"
+  printf 'assertion failure\n' > "$WFSTATE_ROOT/$red"
+  printf 'protected regression\n' > "$WFSTATE_ROOT/$protected"
+  acceptance_sha=$(shasum -a 256 "$WFSTATE_ROOT/$acceptance" | awk '{print $1}')
+  red_sha=$(shasum -a 256 "$WFSTATE_ROOT/$red" | awk '{print $1}')
+  protected_sha=$(shasum -a 256 "$WFSTATE_ROOT/$protected" | awk '{print $1}')
+  sf="$WFSTATE_ROOT/.shode-house/state/${task}.json"
+  tmp=$(mktemp)
+  jq --arg acceptance "$acceptance" --arg acceptance_sha "$acceptance_sha" \
+    --arg red "$red" --arg red_sha "$red_sha" \
+    --arg protected "$protected" --arg protected_sha "$protected_sha" '
+      .source_revision = "fixture-source-revision"
+      | .test_ready = {
+          status: "ready",
+          test_author_lane: "test-author",
+          test_author_session: "fixture-test-author-session",
+          acceptance: {path: $acceptance, sha256: $acceptance_sha, source_revision: "fixture-source-revision"},
+          red: {kind: "assertion", path: $red, sha256: $red_sha},
+          protected_inputs: {($protected): $protected_sha}
+        }
+    ' "$sf" > "$tmp" && mv "$tmp" "$sf"
+}
+
+advance_implementation() {
+  WFSTATE_ACTOR=fixture-implementer-session "$SCRIPT" advance "$@"
 }
 
 # PATH with bd's own directory stripped out (if bd is installed at all) -- used to
@@ -267,6 +306,189 @@ jq empty "$sf" >/dev/null 2>&1; assert_true "$?" "live state must always parse (
 rm -rf "$D"
 
 # ---------------------------------------------------------------------------
+t_start "resume: a rejected command cannot hide an ordinary accepted transition torn write"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init crash-reject-tail >/dev/null 2>&1
+sf="$D/.shode-house/state/crash-reject-tail.json"
+jf="$D/.shode-house/journal/crash-reject-tail.jsonl"
+before_sha=$(shasum "$sf")
+
+WFSTATE_CRASH_BEFORE_RENAME=1 "$SCRIPT" advance crash-reject-tail 1a-spec >/dev/null 2>&1
+crash_rc=$?
+assert_eq "$crash_rc" "137" "ordinary transition must crash after its accepted journal append and before state rename"
+assert_eq "$(shasum "$sf")" "$before_sha" "ordinary torn write must preserve live state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "transition:accept" "ordinary crash must leave an accepted write-ahead journal record"
+
+reject_out=$("$SCRIPT" advance crash-reject-tail 6-operate 2>&1); reject_rc=$?
+assert_false "$reject_rc" "invalid command after an ordinary torn write must reject"
+assert_eq "$(shasum "$sf")" "$before_sha" "intervening rejection must preserve the still-stale live state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "transition:reject" "intervening invalid command must become a rejected journal tail"
+
+resume_out=$("$SCRIPT" resume crash-reject-tail 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must fail closed when a rejected tail follows an unresolved ordinary accepted transition"
+assert_contains "$resume_out" "TORN WRITE DETECTED" "resume must report the ordinary torn write hidden behind the rejected tail"
+assert_eq "$(shasum "$sf")" "$before_sha" "resume rejection must preserve the still-stale live state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "hidden ordinary torn write must be journaled as a resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "retry: journal append failure returns nonzero and preserves state byte-identically"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init retry-journal-fail >/dev/null 2>&1
+sf="$D/.shode-house/state/retry-journal-fail.json"
+jf="$D/.shode-house/journal/retry-journal-fail.jsonl"
+before_sha=$(shasum "$sf")
+
+chmod 400 "$jf"
+retry_out=$("$SCRIPT" retry retry-journal-fail TRANSIENT 2>&1); retry_rc=$?
+chmod 600 "$jf"
+
+assert_false "$retry_rc" "retry must fail when its accepted journal record cannot be appended"
+assert_eq "$(shasum "$sf")" "$before_sha" "failed retry journal append must preserve state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "init:accept" "failed retry append must not fabricate a durable retry audit record"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: failed retry journal append cannot mask an unresolved ordinary transition torn write"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init crash-retry-journal-fail >/dev/null 2>&1
+sf="$D/.shode-house/state/crash-retry-journal-fail.json"
+jf="$D/.shode-house/journal/crash-retry-journal-fail.jsonl"
+before_sha=$(shasum "$sf")
+
+WFSTATE_CRASH_BEFORE_RENAME=1 "$SCRIPT" advance crash-retry-journal-fail 1a-spec >/dev/null 2>&1
+crash_rc=$?
+assert_eq "$crash_rc" "137" "ordinary transition must leave an unresolved accepted journal record before retry"
+assert_eq "$(shasum "$sf")" "$before_sha" "ordinary torn write must leave the live state byte-identical"
+
+chmod 400 "$jf"
+retry_out=$("$SCRIPT" retry crash-retry-journal-fail TRANSIENT 2>&1); retry_rc=$?
+chmod 600 "$jf"
+assert_false "$retry_rc" "retry must fail when its journal append fails behind an ordinary torn write"
+assert_eq "$(shasum "$sf")" "$before_sha" "failed retry must not advance state and balance the unresolved ordinary accept"
+
+resume_out=$("$SCRIPT" resume crash-retry-journal-fail 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must fail closed after a retry journal failure behind an ordinary torn write"
+assert_contains "$resume_out" "TORN WRITE DETECTED" "resume must still report the unresolved ordinary transition"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "ordinary torn write after retry journal failure must be journaled as a resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: successful retry with its accepted mutation record truncated fails closed when state.seq is ahead"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init reverse-truncated >/dev/null 2>&1
+"$SCRIPT" retry reverse-truncated TRANSIENT >/dev/null 2>&1; retry_rc=$?
+sf="$D/.shode-house/state/reverse-truncated.json"
+jf="$D/.shode-house/journal/reverse-truncated.jsonl"
+assert_true "$retry_rc" "fixture retry must succeed before its accepted record is truncated"
+assert_eq "$(jq -r '.seq' "$sf")" "1" "successful retry must durably advance state.seq"
+mutation_count=$(jq -sr '[.[] | select(.result == "accept" and (.op == "transition" or .op == "retry" or (.op == "rework" and .reason == "class=test-defect pending-test-author-handoff")))] | length' "$jf")
+assert_eq "$mutation_count" "1" "successful retry must initially have one correlated accepted mutation"
+head -n 1 "$jf" > "$D/reverse-truncated.jsonl"
+mv -f "$D/reverse-truncated.jsonl" "$jf"
+mutation_count=$(jq -sr '[.[] | select(.result == "accept" and (.op == "transition" or .op == "retry" or (.op == "rework" and .reason == "class=test-defect pending-test-author-handoff")))] | length' "$jf")
+assert_eq "$mutation_count" "0" "fixture truncation must leave state.seq ahead of accepted mutation count"
+
+resume_out=$("$SCRIPT" resume reverse-truncated 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject state.seq greater than the accepted mutation count"
+assert_not_contains "$resume_out" "next step:" "reverse mismatch must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "reverse mismatch must not recommend continuing the phase"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "writable truncated journal must record a fail-closed resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: missing journal for mutated state fails closed and recreates only a rejection audit when writable"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init reverse-missing >/dev/null 2>&1
+"$SCRIPT" retry reverse-missing TRANSIENT >/dev/null 2>&1; retry_rc=$?
+sf="$D/.shode-house/state/reverse-missing.json"
+jf="$D/.shode-house/journal/reverse-missing.jsonl"
+assert_true "$retry_rc" "fixture retry must succeed before the journal is removed"
+assert_eq "$(jq -r '.seq' "$sf")" "1" "missing-journal fixture must retain a mutated state"
+rm -f "$jf"
+
+resume_out=$("$SCRIPT" resume reverse-missing 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject a missing journal for an existing mutated state"
+assert_not_contains "$resume_out" "next step:" "missing journal must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "missing journal must not recommend continuing the phase"
+[ -f "$jf" ] && t_ok || t_fail "writable journal directory must receive a fail-closed rejection audit"
+if [ -f "$jf" ]; then
+  assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "recreated journal must contain only the resume rejection audit"
+fi
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "resume: malformed journal JSON makes correlation unverifiable and fails closed with a rejection audit"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init reverse-malformed >/dev/null 2>&1
+"$SCRIPT" retry reverse-malformed TRANSIENT >/dev/null 2>&1; retry_rc=$?
+sf="$D/.shode-house/state/reverse-malformed.json"
+jf="$D/.shode-house/journal/reverse-malformed.jsonl"
+assert_true "$retry_rc" "fixture retry must succeed before its journal JSON is malformed"
+assert_eq "$(jq -r '.seq' "$sf")" "1" "malformed-journal fixture must retain a mutated state"
+head -n 1 "$jf" > "$D/reverse-malformed.jsonl"
+printf '%s\n' '{not-valid-json' >> "$D/reverse-malformed.jsonl"
+mv -f "$D/reverse-malformed.jsonl" "$jf"
+
+resume_out=$("$SCRIPT" resume reverse-malformed 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must reject malformed journal JSON instead of accepting empty correlation"
+assert_not_contains "$resume_out" "next step:" "malformed journal must not print a continuation recommendation"
+assert_not_contains "$resume_out" "continue phase" "malformed journal must not recommend continuing the phase"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "writable malformed journal must record a fail-closed resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+# Every case remains syntactically valid JSON and preserves one apparent accepted
+# retry, so a count-only correlation check would incorrectly accept it.
+for journal_case in missing-required-fields wrong-bd duplicate-seq gapped-seq invalid-field-type; do
+  t_start "resume: schema-invalid accepted mutation ($journal_case) fails closed"
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  task="schema-$journal_case"
+  "$SCRIPT" init "$task" >/dev/null 2>&1
+  "$SCRIPT" retry "$task" TRANSIENT >/dev/null 2>&1; retry_rc=$?
+  sf="$D/.shode-house/state/$task.json"
+  jf="$D/.shode-house/journal/$task.jsonl"
+  assert_true "$retry_rc" "fixture retry must succeed before its accepted record is schema-corrupted"
+  assert_eq "$(jq -r '.seq' "$sf")" "1" "schema-corruption fixture must retain one durable state mutation"
+
+  case "$journal_case" in
+    missing-required-fields)
+      forged='{"result":"accept","op":"retry"}'
+      ;;
+    wrong-bd)
+      forged=$(tail -n1 "$jf" | jq -c '.bd_id = "another-task"')
+      ;;
+    duplicate-seq)
+      forged=$(tail -n1 "$jf" | jq -c '.seq = 1')
+      ;;
+    gapped-seq)
+      forged=$(tail -n1 "$jf" | jq -c '.seq = 3')
+      ;;
+    invalid-field-type)
+      forged=$(tail -n1 "$jf" | jq -c '.actor = null')
+      ;;
+  esac
+  head -n 1 "$jf" > "$D/schema-invalid.jsonl"
+  printf '%s\n' "$forged" >> "$D/schema-invalid.jsonl"
+  mv -f "$D/schema-invalid.jsonl" "$jf"
+  jq -s empty "$jf" >/dev/null 2>&1
+  assert_true "$?" "schema-corrupted journal must remain syntactically valid JSON"
+
+  resume_out=$("$SCRIPT" resume "$task" 2>&1); resume_rc=$?
+  assert_false "$resume_rc" "resume must reject a syntactically valid but schema-invalid journal"
+  assert_not_contains "$resume_out" "next step:" "schema-invalid journal must not print a continuation recommendation"
+  assert_not_contains "$resume_out" "continue phase" "schema-invalid journal must not recommend continuing the phase"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
 t_start "lock contention: a live holder blocks a concurrent advance, which fails loud within budget (not forever), state untouched"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"
@@ -459,7 +681,8 @@ ok=1
 "$SCRIPT" advance loop-1 1a-spec      >/dev/null 2>&1 || ok=0
 "$SCRIPT" advance loop-1 1b-design    >/dev/null 2>&1 || ok=0
 "$SCRIPT" advance loop-1 1c-security  >/dev/null 2>&1 || ok=0
-"$SCRIPT" advance loop-1 2-implement  >/dev/null 2>&1 || ok=0
+prepare_test_ready loop-1
+advance_implementation loop-1 2-implement  >/dev/null 2>&1 || ok=0
 "$SCRIPT" advance loop-1 3a-ui-check  >/dev/null 2>&1 || ok=0
 "$SCRIPT" advance loop-1 3b-review    >/dev/null 2>&1 || ok=0
 "$SCRIPT" advance loop-1 4-triage     >/dev/null 2>&1 || ok=0
@@ -483,7 +706,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance rew-1 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance rew-1 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance rew-1 1c-security >/dev/null 2>&1
-"$SCRIPT" advance rew-1 2-implement >/dev/null 2>&1
+prepare_test_ready rew-1
+advance_implementation rew-1 2-implement >/dev/null 2>&1
 "$SCRIPT" advance rew-1 3a-ui-check >/dev/null 2>&1
 out=$("$SCRIPT" advance rew-1 1b-design failed 2>&1); rc=$?
 assert_true "$rc" "3a-ui-check -> 1b-design loop-back should be a legal, declared edge"
@@ -500,11 +724,12 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance rew-2 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance rew-2 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance rew-2 1c-security >/dev/null 2>&1
-"$SCRIPT" advance rew-2 2-implement >/dev/null 2>&1
+prepare_test_ready rew-2
+advance_implementation rew-2 2-implement >/dev/null 2>&1
 "$SCRIPT" advance rew-2 3b-review implement-done-backend-only 2>/dev/null # wrong outcome name -> rejected, ignored on purpose (sanity: outcome enum ignores 'on' labels)
 out=$("$SCRIPT" advance rew-2 3b-review 2>&1); rc=$?
 assert_true "$rc" "2-implement -> 3b-review backend-only bypass edge should be legal"
-out=$("$SCRIPT" advance rew-2 2-implement failed 2>&1); rc=$?
+out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" advance rew-2 2-implement failed 2>&1); rc=$?
 assert_true "$rc" "3b-review -> 2-implement loop-back should be a legal, declared edge"
 rm -rf "$D"
 
@@ -516,7 +741,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance spc-1 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance spc-1 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance spc-1 1c-security >/dev/null 2>&1
-"$SCRIPT" advance spc-1 2-implement >/dev/null 2>&1
+prepare_test_ready spc-1
+advance_implementation spc-1 2-implement >/dev/null 2>&1
 out=$("$SCRIPT" advance spc-1 1a-spec failed 2>&1); rc=$?
 assert_true "$rc" "2-implement -> 1a-spec spec-change edge should be legal"
 sf="$D/.shode-house/state/spc-1.json"
@@ -552,7 +778,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance er-2 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance er-2 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance er-2 1c-security >/dev/null 2>&1
-out=$("$SCRIPT" advance er-2 2-implement 2>&1); rc=$?
+prepare_test_ready er-2
+out=$(advance_implementation er-2 2-implement 2>&1); rc=$?
 assert_true "$rc" "entering 2-implement should succeed once 1a passed and 1b/1c passed"
 rm -rf "$D"
 
@@ -602,7 +829,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance gate-3a 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance gate-3a 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance gate-3a 1c-security >/dev/null 2>&1
-"$SCRIPT" advance gate-3a 2-implement >/dev/null 2>&1
+prepare_test_ready gate-3a
+advance_implementation gate-3a 2-implement >/dev/null 2>&1
 err=$("$SCRIPT" advance gate-3a 3a-ui-check failed 2>&1); rc=$?
 assert_false "$rc" "2-implement ending failed must not be allowed into 3a-ui-check"
 assert_contains "$err" "enter_requires" "rejection reason should mention enter_requires"
@@ -616,7 +844,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance gate-4t 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance gate-4t 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance gate-4t 1c-security >/dev/null 2>&1
-"$SCRIPT" advance gate-4t 2-implement >/dev/null 2>&1
+prepare_test_ready gate-4t
+advance_implementation gate-4t 2-implement >/dev/null 2>&1
 "$SCRIPT" advance gate-4t 3a-ui-check >/dev/null 2>&1
 "$SCRIPT" advance gate-4t 3b-review   >/dev/null 2>&1
 err=$("$SCRIPT" advance gate-4t 4-triage failed 2>&1); rc=$?
@@ -632,7 +861,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance gate-5d 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance gate-5d 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance gate-5d 1c-security >/dev/null 2>&1
-"$SCRIPT" advance gate-5d 2-implement >/dev/null 2>&1
+prepare_test_ready gate-5d
+advance_implementation gate-5d 2-implement >/dev/null 2>&1
 "$SCRIPT" advance gate-5d 3a-ui-check >/dev/null 2>&1
 "$SCRIPT" advance gate-5d 3b-review   >/dev/null 2>&1
 "$SCRIPT" advance gate-5d 4-triage    >/dev/null 2>&1
@@ -649,7 +879,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance gate-6o 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance gate-6o 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance gate-6o 1c-security >/dev/null 2>&1
-"$SCRIPT" advance gate-6o 2-implement >/dev/null 2>&1
+prepare_test_ready gate-6o
+advance_implementation gate-6o 2-implement >/dev/null 2>&1
 "$SCRIPT" advance gate-6o 3a-ui-check >/dev/null 2>&1
 "$SCRIPT" advance gate-6o 3b-review   >/dev/null 2>&1
 "$SCRIPT" advance gate-6o 4-triage    >/dev/null 2>&1
@@ -661,6 +892,650 @@ assert_contains "$err" "5-deploy" "rejection reason should name the specific unm
 rm -rf "$D"
 
 # ---------------------------------------------------------------------------
+t_start "test_ready: entering implementation is blocked when no independent RED evidence is recorded"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-missing >/dev/null 2>&1
+"$SCRIPT" advance trdy-missing 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-missing 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-missing 1c-security >/dev/null 2>&1
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-missing 2-implement 2>&1); rc=$?
+assert_false "$rc" "1c-security -> 2-implement must require a shared test_ready record"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: omitted WFSTATE_ACTOR fails closed, preserves state, and journals rejection"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-no-actor >/dev/null 2>&1
+"$SCRIPT" advance trdy-no-actor 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-no-actor 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-no-actor 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-no-actor.json"
+before_sha=$(shasum "$sf")
+err=$(env -u WFSTATE_ACTOR USER=implicit-user "$SCRIPT" advance trdy-no-actor 2-implement 2>&1); rc=$?
+assert_false "$rc" "omitting WFSTATE_ACTOR must not bypass the test_ready gate"
+assert_eq "$(shasum "$sf")" "$before_sha" "a rejected actor-less transition must leave state byte-identical"
+jf="$D/.shode-house/journal/trdy-no-actor.jsonl"
+assert_eq "$(tail -n1 "$jf" | jq -r '.result')" "reject" "actor-less rejection must be journaled"
+assert_eq "$(tail -n1 "$jf" | jq -r '.actor')" "implicit-user" "journal should retain the resolved actor for audit evidence"
+rm -rf "$D"
+
+# `test_ready` is deliberately part of the shared state file rather than a private
+# test-runner convention.  It binds the independent author, acceptance artifact,
+# assertion-failing RED transcript, and every test-side input the implementer must not
+# change.  The positive control below keeps the future gate from satisfying these
+# negative cases by rejecting every transition into implementation.
+t_start "test_ready: test author cannot enter implementation as the implementer"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-identity >/dev/null 2>&1
+"$SCRIPT" advance trdy-identity 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-identity 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-identity 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-identity.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready",
+    test_author_lane: "test-author",
+    test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha, source_revision: "source-revision-1"},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+err=$(WFSTATE_ACTOR=test-author-session "$SCRIPT" advance trdy-identity 2-implement 2>&1); rc=$?
+assert_false "$rc" "the recorded test-author session must not also act as implementer"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: changed protected test input blocks implementation"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-test-drift >/dev/null 2>&1
+"$SCRIPT" advance trdy-test-drift 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-test-drift 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-test-drift 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-test-drift.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready",
+    test_author_lane: "test-author",
+    test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha, source_revision: "source-revision-1"},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+printf 'implementer weakened regression test' > "$D/tests/regression.sh"
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-test-drift 2-implement 2>&1); rc=$?
+assert_false "$rc" "a protected test/fixture/snapshot/config hash mismatch must block implementation"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: changed acceptance evidence blocks implementation"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-ac-drift >/dev/null 2>&1
+"$SCRIPT" advance trdy-ac-drift 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-ac-drift 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-ac-drift 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-ac-drift.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready",
+    test_author_lane: "test-author",
+    test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha, source_revision: "source-revision-1"},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+printf 'acceptance v2 without a new test-author handoff' > "$D/outputs/spec.md"
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-ac-drift 2-implement 2>&1); rc=$?
+assert_false "$rc" "a changed acceptance hash must invalidate test_ready"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: missing acceptance source revision is rejected"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-rev-missing >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-missing 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-missing 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-missing 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-rev-missing.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready", test_author_lane: "test-author", test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+before_sha=$(shasum "$sf")
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-rev-missing 2-implement 2>&1); rc=$?
+assert_false "$rc" "test_ready without acceptance.source_revision must be rejected"
+assert_eq "$(shasum "$sf")" "$before_sha" "missing acceptance revision rejection must preserve state"
+assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-rev-missing.jsonl" | jq -r '.result')" "reject" "missing acceptance revision must journal rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: mismatched acceptance source revision is rejected"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-rev-mismatch >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-mismatch 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-mismatch 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-rev-mismatch 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-rev-mismatch.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready", test_author_lane: "test-author", test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha, source_revision: "different-revision"},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+before_sha=$(shasum "$sf")
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-rev-mismatch 2-implement 2>&1); rc=$?
+assert_false "$rc" "acceptance.source_revision must match the canonical source_revision"
+assert_eq "$(shasum "$sf")" "$before_sha" "mismatched acceptance revision rejection must preserve state"
+assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-rev-mismatch.jsonl" | jq -r '.result')" "reject" "mismatched acceptance revision must journal rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: final-component symlink escaping engagement root is rejected"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+outside=$(mktemp -d -t wfstate-outside.XXXXXX)
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'outside protected input' > "$outside/regression.sh"
+ln -s "$outside/regression.sh" "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$outside/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-link-file >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-file 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-file 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-file 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-link-file.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {status:"ready", test_author_lane:"test-author", test_author_session:"test-author-session",
+    acceptance:{path:"outputs/spec.md", sha256:$acceptance_sha, source_revision:"source-revision-1"},
+    red:{kind:"assertion", path:"outputs/red.log", sha256:$red_sha}, protected_inputs:{"tests/regression.sh":$test_sha}}' "$sf" > "$tmp" && mv "$tmp" "$sf"
+before_sha=$(shasum "$sf")
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-link-file 2-implement 2>&1); rc=$?
+assert_false "$rc" "a final-component symlink must not escape the engagement root"
+assert_eq "$(shasum "$sf")" "$before_sha" "symlink escape rejection must preserve state"
+assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-link-file.jsonl" | jq -r '.result')" "reject" "symlink escape must journal rejection"
+rm -rf "$D" "$outside"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: symlinked parent escaping engagement root is rejected"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+outside=$(mktemp -d -t wfstate-outside.XXXXXX)
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'outside protected input' > "$outside/regression.sh"
+ln -s "$outside" "$D/tests/external"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$outside/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-link-parent >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-parent 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-parent 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-link-parent 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-link-parent.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {status:"ready", test_author_lane:"test-author", test_author_session:"test-author-session",
+    acceptance:{path:"outputs/spec.md", sha256:$acceptance_sha, source_revision:"source-revision-1"},
+    red:{kind:"assertion", path:"outputs/red.log", sha256:$red_sha}, protected_inputs:{"tests/external/regression.sh":$test_sha}}' "$sf" > "$tmp" && mv "$tmp" "$sf"
+before_sha=$(shasum "$sf")
+err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-link-parent 2-implement 2>&1); rc=$?
+assert_false "$rc" "a symlinked parent must not escape the engagement root"
+assert_eq "$(shasum "$sf")" "$before_sha" "symlinked-parent rejection must preserve state"
+assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-link-parent.jsonl" | jq -r '.result')" "reject" "symlinked-parent escape must journal rejection"
+rm -rf "$D" "$outside"
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: complete current evidence permits a distinct implementer session"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/outputs" "$D/tests"
+export WFSTATE_ROOT="$D"
+printf 'acceptance v1' > "$D/outputs/spec.md"
+printf 'assertion failure' > "$D/outputs/red.log"
+printf 'regression test v1' > "$D/tests/regression.sh"
+acceptance_sha=$(shasum -a 256 "$D/outputs/spec.md" | awk '{print $1}')
+red_sha=$(shasum -a 256 "$D/outputs/red.log" | awk '{print $1}')
+test_sha=$(shasum -a 256 "$D/tests/regression.sh" | awk '{print $1}')
+"$SCRIPT" init trdy-ok >/dev/null 2>&1
+"$SCRIPT" advance trdy-ok 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-ok 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-ok 1c-security >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-ok.json"
+tmp=$(mktemp)
+jq --arg acceptance_sha "$acceptance_sha" --arg red_sha "$red_sha" --arg test_sha "$test_sha" '
+  .source_revision = "source-revision-1"
+  | .test_ready = {
+    status: "ready",
+    test_author_lane: "test-author",
+    test_author_session: "test-author-session",
+    acceptance: {path: "outputs/spec.md", sha256: $acceptance_sha, source_revision: "source-revision-1"},
+    red: {kind: "assertion", path: "outputs/red.log", sha256: $red_sha},
+    protected_inputs: {"tests/regression.sh": $test_sha}
+  }' "$sf" > "$tmp" && mv "$tmp" "$sf"
+out=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-ok 2-implement 2>&1); rc=$?
+assert_true "$rc" "current bound evidence plus a distinct implementer session should satisfy test_ready"
+rm -rf "$D"
+
+# Once implementation starts, the same shared binding checker must still protect
+# every class of evidence on the outbound review edge.  These cases deliberately
+# mutate one bound class at a time after a valid entry into 2-implement.
+t_start "test_ready: post-entry drift in every bound evidence class blocks outbound review"
+for bound_class in acceptance red protected; do
+  task="trdy-exit-${bound_class}"
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  "$SCRIPT" init "$task" >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1a-spec     >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1b-design   >/dev/null 2>&1
+  "$SCRIPT" advance "$task" 1c-security >/dev/null 2>&1
+  prepare_test_ready "$task"
+  advance_implementation "$task" 2-implement >/dev/null 2>&1; entry_rc=$?
+  assert_true "$entry_rc" "$bound_class case must enter 2-implement with valid bound evidence"
+
+  sf="$D/.shode-house/state/${task}.json"
+  case "$bound_class" in
+    acceptance) bound_path=$(jq -r '.test_ready.acceptance.path' "$sf") ;;
+    red)        bound_path=$(jq -r '.test_ready.red.path' "$sf") ;;
+    protected)  bound_path=$(jq -r '.test_ready.protected_inputs | keys[0]' "$sf") ;;
+  esac
+  printf 'post-entry mutation of %s\n' "$bound_class" > "$D/$bound_path"
+
+  before_sha=$(shasum "$sf")
+  err=$(advance_implementation "$task" 3b-review 2>&1); rc=$?
+  assert_false "$rc" "post-entry $bound_class drift must reject the legal 2-implement -> 3b-review transition"
+  assert_eq "$(shasum "$sf")" "$before_sha" "post-entry $bound_class drift rejection must preserve state byte-identically"
+  assert_eq "$(tail -n1 "$D/.shode-house/journal/${task}.jsonl" | jq -r '.result')" "reject" "post-entry $bound_class drift must journal rejection"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
+t_start "test_ready: sentinel and blank recorded test-author identities are rejected"
+for invalid_author in unknown "" "   "; do
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  "$SCRIPT" init "trdy-invalid-author" >/dev/null 2>&1
+  "$SCRIPT" advance trdy-invalid-author 1a-spec     >/dev/null 2>&1
+  "$SCRIPT" advance trdy-invalid-author 1b-design   >/dev/null 2>&1
+  "$SCRIPT" advance trdy-invalid-author 1c-security >/dev/null 2>&1
+  prepare_test_ready trdy-invalid-author
+  sf="$D/.shode-house/state/trdy-invalid-author.json"
+  tmp=$(mktemp)
+  jq --arg author "$invalid_author" '.test_ready.test_author_session = $author' "$sf" > "$tmp" && mv "$tmp" "$sf"
+  before_sha=$(shasum "$sf")
+  err=$(WFSTATE_ACTOR=implementer-session "$SCRIPT" advance trdy-invalid-author 2-implement 2>&1); rc=$?
+  assert_false "$rc" "recorded test-author identity '$invalid_author' must be rejected"
+  assert_eq "$(shasum "$sf")" "$before_sha" "invalid recorded test-author rejection must preserve state"
+  assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-invalid-author.jsonl" | jq -r '.result')" "reject" "invalid recorded test-author rejection must be journaled"
+  rm -rf "$D"
+done
+
+# ---------------------------------------------------------------------------
+t_start "test defect: rework CLI creates a pending handoff from test_ready"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-cli >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-cli 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-cli 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-cli 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-cli
+advance_implementation trdy-defect-cli 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-cli 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-cli.json"
+out=$(WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-cli test-defect 2>&1); rc=$?
+assert_true "$rc" "rework must support the test-defect triage class"
+assert_eq "$(jq -r '.test_defect.status // "missing"' "$sf")" "pending" "test-defect rework must create a pending handoff"
+assert_eq "$(jq -r '.test_defect.original_test_author_lane // "missing"' "$sf")" "test-author" "pending handoff must copy the original test-author lane"
+assert_eq "$(jq -r '.test_defect.prior_test_author_session // "missing"' "$sf")" "fixture-test-author-session" "pending handoff must copy the prior test-author session"
+assert_eq "$(jq -r '.current_phase' "$sf")" "3b-review" "creating the pending handoff must await a separate claimant"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test defect: resume accepts an intentional pending handoff before claim"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-resume >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-resume 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-resume 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-resume 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-resume
+advance_implementation trdy-defect-resume 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-resume 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-resume.json"
+WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-resume test-defect >/dev/null 2>&1
+before_sha=$(shasum "$sf")
+out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-resume 2>&1); rc=$?
+assert_true "$rc" "resume must accept the intentional pending handoff before a fresh test author claims it"
+assert_not_contains "$out" "TORN WRITE DETECTED" "an intentional pending handoff must not be classified as torn"
+assert_eq "$(shasum "$sf")" "$before_sha" "resume must preserve pending handoff state byte-identically"
+assert_eq "$(jq -r '.test_defect.status // "missing"' "$sf")" "pending" "resume must preserve the unclaimed test-defect handoff"
+assert_eq "$(jq -r '.current_phase' "$sf")" "3b-review" "resume must keep the workflow waiting at review until claim"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+# A pending handoff is only evidence for the journal operation that created it.
+# A later rework must either reject before another accepted journal record, or its
+# own journal-before-rename crash must remain distinguishable and make resume fail
+# closed.  The fresh-task control keeps the rejection implementation honest by
+# exercising the real first-handoff torn window with the shared crash hook.
+t_start "test defect: a stale pending handoff cannot mask a later rework torn write"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-stale-pending >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-stale-pending 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-stale-pending 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-stale-pending 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-stale-pending
+advance_implementation trdy-defect-stale-pending 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-stale-pending 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-stale-pending.json"
+jf="$D/.shode-house/journal/trdy-defect-stale-pending.jsonl"
+WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-stale-pending test-defect >/dev/null 2>&1
+pending_sha=$(shasum "$sf")
+pending_journal_count=$(wc -l < "$jf" | tr -d ' ')
+
+second_out=$(WFSTATE_ACTOR=triage-session WFSTATE_CRASH_BEFORE_RENAME=1 \
+  "$SCRIPT" rework trdy-defect-stale-pending test-defect 2>&1)
+second_rc=$?
+if [ "$second_rc" -eq 137 ]; then
+  assert_eq "$(shasum "$sf")" "$pending_sha" "a crashed duplicate rework must preserve the original pending state byte-identically"
+  assert_eq "$(wc -l < "$jf" | tr -d ' ')" "$((pending_journal_count + 1))" "a crashed duplicate rework must leave exactly one new write-ahead journal record"
+  assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "rework:accept" "the injected duplicate crash must occur after its accepted rework journal append"
+  resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-stale-pending 2>&1); resume_rc=$?
+  assert_false "$resume_rc" "resume must fail closed when a duplicate accepted rework is ahead of the stale pending state"
+  assert_contains "$resume_out" "TORN WRITE DETECTED" "the stale pending object must not mask the duplicate rework torn write"
+  assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "the detected duplicate torn write must be journaled as a resume rejection"
+else
+  assert_false "$second_rc" "a duplicate test-defect rework with an unclaimed pending handoff must reject before another accept"
+  assert_contains "$second_out" "pending" "duplicate rejection must identify the unresolved pending handoff"
+  assert_eq "$(shasum "$sf")" "$pending_sha" "duplicate pending rejection must preserve state byte-identically"
+  assert_eq "$(wc -l < "$jf" | tr -d ' ')" "$((pending_journal_count + 1))" "duplicate pending rejection must append exactly one audit record"
+  assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "rework:reject" "duplicate pending rejection must not be journaled as accepted"
+  resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-stale-pending 2>&1); resume_rc=$?
+  assert_true "$resume_rc" "resume must still recognize the original intentional pending handoff after duplicate rejection"
+  assert_not_contains "$resume_out" "TORN WRITE DETECTED" "a rejected duplicate must not create or hide a torn write"
+fi
+rm -rf "$D"
+
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-first-torn >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-first-torn 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-first-torn 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-first-torn 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-first-torn
+advance_implementation trdy-defect-first-torn 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-first-torn 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-first-torn.json"
+jf="$D/.shode-house/journal/trdy-defect-first-torn.jsonl"
+before_sha=$(shasum "$sf")
+first_out=$(WFSTATE_ACTOR=triage-session WFSTATE_CRASH_BEFORE_RENAME=1 \
+  "$SCRIPT" rework trdy-defect-first-torn test-defect 2>&1)
+first_rc=$?
+assert_eq "$first_rc" "137" "the test-only crash hook must cover a test-defect rework after journal append and before state rename"
+assert_eq "$(shasum "$sf")" "$before_sha" "the injected first-handoff crash must preserve live state byte-identically"
+assert_eq "$(jq -r '.test_defect.status // "missing"' "$sf")" "missing" "the injected first-handoff crash must not install its pending object"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "rework:accept" "the first-handoff crash must leave its accepted write-ahead journal record"
+resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-first-torn 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must fail closed on a first-handoff rework torn write"
+assert_contains "$resume_out" "TORN WRITE DETECTED" "resume must report the real first-handoff torn window"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "the first-handoff torn write must be journaled as a resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test defect: a rejected command cannot hide a first-handoff torn write"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-reject-tail >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-reject-tail 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-reject-tail 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-reject-tail 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-reject-tail
+advance_implementation trdy-defect-reject-tail 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-reject-tail 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-reject-tail.json"
+jf="$D/.shode-house/journal/trdy-defect-reject-tail.jsonl"
+before_sha=$(shasum "$sf")
+
+WFSTATE_ACTOR=triage-session WFSTATE_CRASH_BEFORE_RENAME=1 \
+  "$SCRIPT" rework trdy-defect-reject-tail test-defect >/dev/null 2>&1
+crash_rc=$?
+assert_eq "$crash_rc" "137" "first test-defect handoff must crash after its accepted journal append and before state rename"
+assert_eq "$(shasum "$sf")" "$before_sha" "first-handoff torn write must preserve live state byte-identically"
+assert_eq "$(jq -r '.test_defect.status // "missing"' "$sf")" "missing" "first-handoff crash must not install its pending checkpoint"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "rework:accept" "first-handoff crash must leave an accepted write-ahead journal record"
+
+reject_out=$("$SCRIPT" advance trdy-defect-reject-tail 6-operate 2>&1); reject_rc=$?
+assert_false "$reject_rc" "invalid command after a first-handoff torn write must reject"
+assert_eq "$(shasum "$sf")" "$before_sha" "intervening rejection must preserve the missing handoff state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "transition:reject" "intervening invalid command must become a rejected journal tail"
+
+resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-reject-tail 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must fail closed when a rejected tail follows an unresolved first-handoff accept"
+assert_contains "$resume_out" "TORN WRITE DETECTED" "resume must report the first-handoff torn write hidden behind the rejected tail"
+assert_eq "$(shasum "$sf")" "$before_sha" "resume rejection must preserve the missing handoff state byte-identically"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "hidden first-handoff torn write must be journaled as a resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test defect: failed retry journal append cannot mask an unresolved first-handoff torn write"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-retry-journal-fail >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-retry-journal-fail 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-retry-journal-fail 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-retry-journal-fail 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-retry-journal-fail
+advance_implementation trdy-defect-retry-journal-fail 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-retry-journal-fail 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-retry-journal-fail.json"
+jf="$D/.shode-house/journal/trdy-defect-retry-journal-fail.jsonl"
+before_sha=$(shasum "$sf")
+
+WFSTATE_ACTOR=triage-session WFSTATE_CRASH_BEFORE_RENAME=1 \
+  "$SCRIPT" rework trdy-defect-retry-journal-fail test-defect >/dev/null 2>&1
+crash_rc=$?
+assert_eq "$crash_rc" "137" "first test-defect handoff must leave an unresolved accepted journal record before retry"
+assert_eq "$(shasum "$sf")" "$before_sha" "first-handoff torn write must leave the live state byte-identical"
+
+chmod 400 "$jf"
+retry_out=$("$SCRIPT" retry trdy-defect-retry-journal-fail TRANSIENT 2>&1); retry_rc=$?
+chmod 600 "$jf"
+assert_false "$retry_rc" "retry must fail when its journal append fails behind a first-handoff torn write"
+assert_eq "$(shasum "$sf")" "$before_sha" "failed retry must not advance state and balance the unresolved first-handoff accept"
+
+resume_out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" resume trdy-defect-retry-journal-fail 2>&1); resume_rc=$?
+assert_false "$resume_rc" "resume must fail closed after a retry journal failure behind a first-handoff torn write"
+assert_contains "$resume_out" "TORN WRITE DETECTED" "resume must still report the unresolved first test-defect handoff"
+assert_eq "$(tail -n1 "$jf" | jq -r '[.op,.result] | join(":")')" "resume:reject" "first-handoff torn write after retry journal failure must be journaled as a resume rejection"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test defect: rework revalidates phase after acquiring the per-task lock"
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-race >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-race 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-race 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-race 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-race
+advance_implementation trdy-defect-race 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-race 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-race.json"
+sync="$D/rework-lock-sync"
+fake_lock="$D/pausing-lock.sh"
+printf 'source %q\n' "$REPO_ROOT/scripts/lib/lock.sh" > "$fake_lock"
+printf '%s\n' \
+  'eval "$(declare -f lock_acquire | sed '\''1s/lock_acquire/real_lock_acquire/'\'')"' \
+  'lock_acquire() {' \
+  '  if [ "${WFSTATE_TEST_PAUSE_REWORK:-0}" = "1" ]; then' \
+  '    : > "$WFSTATE_TEST_SYNC.ready"' \
+  '    i=0' \
+  '    while [ ! -e "$WFSTATE_TEST_SYNC.go" ] && [ "$i" -lt 200 ]; do' \
+  '      sleep 0.05' \
+  '      i=$((i + 1))' \
+  '    done' \
+  '  fi' \
+  '  real_lock_acquire "$@"' \
+  '}' >> "$fake_lock"
+
+(
+  WFSTATE_ACTOR=triage-session \
+    WFSTATE_LOCK_LIB="$fake_lock" \
+    WFSTATE_TEST_PAUSE_REWORK=1 \
+    WFSTATE_TEST_SYNC="$sync" \
+    "$SCRIPT" rework trdy-defect-race test-defect >"$D/rework.out" 2>&1
+  printf '%s\n' "$?" > "$D/rework.rc"
+) &
+rework_pid=$!
+i=0
+while [ ! -e "$sync.ready" ] && [ "$i" -lt 200 ]; do
+  sleep 0.05
+  i=$((i + 1))
+done
+[ -e "$sync.ready" ] && t_ok || t_fail "rework must reach the deterministic pre-lock synchronization point"
+
+WFSTATE_LOCK_LIB="$REPO_ROOT/scripts/lib/lock.sh" \
+  advance_implementation trdy-defect-race 4-triage >/dev/null 2>&1
+writer_rc=$?
+assert_true "$writer_rc" "concurrent writer must move the workflow out of 3b-review before rework acquires the lock"
+writer_sha=$(shasum "$sf")
+writer_journal_count=$(wc -l < "$D/.shode-house/journal/trdy-defect-race.jsonl" | tr -d ' ')
+: > "$sync.go"
+wait "$rework_pid"
+rework_rc=$(cat "$D/rework.rc")
+rework_out=$(cat "$D/rework.out")
+
+assert_false "$rework_rc" "rework must reject a stale 3b-review snapshot after the concurrent writer changes phase"
+assert_contains "$rework_out" "requires current phase '3b-review', got '4-triage'" "rework rejection must report the lock-protected current phase"
+assert_eq "$(shasum "$sf")" "$writer_sha" "stale rework rejection must preserve the concurrent writer's state"
+assert_eq "$(jq -r '.test_defect.status // "missing"' "$sf")" "missing" "stale rework must not create a pending test-author handoff"
+assert_eq "$(wc -l < "$D/.shode-house/journal/trdy-defect-race.jsonl" | tr -d ' ')" "$writer_journal_count" "stale rework must not append a journal entry after the concurrent writer"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "test defect: only a fresh valid test-author session can claim the CLI-created handoff"
+for claimant in fixture-implementer-session fixture-test-author-session unknown "" "   "; do
+  D=$(sandbox); mkdir -p "$D/.shode-house"
+  export WFSTATE_ROOT="$D"
+  "$SCRIPT" init trdy-defect-claim >/dev/null 2>&1
+  "$SCRIPT" advance trdy-defect-claim 1a-spec     >/dev/null 2>&1
+  "$SCRIPT" advance trdy-defect-claim 1b-design   >/dev/null 2>&1
+  "$SCRIPT" advance trdy-defect-claim 1c-security >/dev/null 2>&1
+  prepare_test_ready trdy-defect-claim
+  advance_implementation trdy-defect-claim 2-implement >/dev/null 2>&1
+  advance_implementation trdy-defect-claim 3b-review   >/dev/null 2>&1
+  sf="$D/.shode-house/state/trdy-defect-claim.json"
+  WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-claim test-defect >/dev/null 2>&1
+  before_sha=$(shasum "$sf")
+  err=$(WFSTATE_ACTOR="$claimant" "$SCRIPT" advance trdy-defect-claim 2-implement failed 2>&1); rc=$?
+  assert_false "$rc" "claimant '$claimant' must not claim the test-defect handoff"
+  assert_eq "$(shasum "$sf")" "$before_sha" "rejected test-defect claimant must preserve state"
+  assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-defect-claim.jsonl" | jq -r '.result')" "reject" "rejected test-defect claimant must be journaled"
+  rm -rf "$D"
+done
+
+# The handoff must remain fail-closed even if a stored identity is corrupted after
+# creation.  The pending object itself is still established through the public CLI.
+for stored_field in implementer prior_author; do
+  for invalid_identity in unknown "" "   "; do
+    D=$(sandbox); mkdir -p "$D/.shode-house"
+    export WFSTATE_ROOT="$D"
+    "$SCRIPT" init trdy-defect-stored >/dev/null 2>&1
+    "$SCRIPT" advance trdy-defect-stored 1a-spec     >/dev/null 2>&1
+    "$SCRIPT" advance trdy-defect-stored 1b-design   >/dev/null 2>&1
+    "$SCRIPT" advance trdy-defect-stored 1c-security >/dev/null 2>&1
+    prepare_test_ready trdy-defect-stored
+    advance_implementation trdy-defect-stored 2-implement >/dev/null 2>&1
+    advance_implementation trdy-defect-stored 3b-review   >/dev/null 2>&1
+    sf="$D/.shode-house/state/trdy-defect-stored.json"
+    WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-stored test-defect >/dev/null 2>&1
+    tmp=$(mktemp)
+    if [ "$stored_field" = "implementer" ]; then
+      jq --arg identity "$invalid_identity" '.test_ready.implementer_session = $identity' "$sf" > "$tmp" && mv "$tmp" "$sf"
+    else
+      jq --arg identity "$invalid_identity" '.test_defect.prior_test_author_session = $identity' "$sf" > "$tmp" && mv "$tmp" "$sf"
+    fi
+    before_sha=$(shasum "$sf")
+    err=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" advance trdy-defect-stored 2-implement failed 2>&1); rc=$?
+    assert_false "$rc" "invalid stored $stored_field identity '$invalid_identity' must reject a test-defect claim"
+    assert_eq "$(shasum "$sf")" "$before_sha" "invalid stored $stored_field identity rejection must preserve state"
+    assert_eq "$(tail -n1 "$D/.shode-house/journal/trdy-defect-stored.jsonl" | jq -r '.result')" "reject" "invalid stored $stored_field identity rejection must be journaled"
+    rm -rf "$D"
+  done
+done
+
+D=$(sandbox); mkdir -p "$D/.shode-house"
+export WFSTATE_ROOT="$D"
+"$SCRIPT" init trdy-defect-fresh >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-fresh 1a-spec     >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-fresh 1b-design   >/dev/null 2>&1
+"$SCRIPT" advance trdy-defect-fresh 1c-security >/dev/null 2>&1
+prepare_test_ready trdy-defect-fresh
+advance_implementation trdy-defect-fresh 2-implement >/dev/null 2>&1
+advance_implementation trdy-defect-fresh 3b-review   >/dev/null 2>&1
+sf="$D/.shode-house/state/trdy-defect-fresh.json"
+WFSTATE_ACTOR=triage-session "$SCRIPT" rework trdy-defect-fresh test-defect >/dev/null 2>&1
+out=$(WFSTATE_ACTOR=fresh-test-author-session "$SCRIPT" advance trdy-defect-fresh 2-implement failed 2>&1); rc=$?
+assert_true "$rc" "a fresh test-author session should claim the CLI-created handoff"
+assert_eq "$(jq -r '.active_lane' "$sf")" "test-author" "fresh claim must restore the original test-author lane"
+assert_eq "$(jq -r '.test_defect.test_author_session' "$sf")" "fresh-test-author-session" "fresh claim must record its session"
+assert_eq "$(jq -r '.test_defect.status' "$sf")" "claimed" "fresh claim must resolve the pending handoff"
+rm -rf "$D"
+
+# ---------------------------------------------------------------------------
 t_start "skip: a conditional phase (1b-design) can end status=skipped and still satisfy 2-implement's enter_requires"
 D=$(sandbox); mkdir -p "$D/.shode-house"
 export WFSTATE_ROOT="$D"
@@ -669,7 +1544,8 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance sk-1 1b-design >/dev/null 2>&1
 out=$("$SCRIPT" advance sk-1 1c-security skipped 2>&1); rc=$?
 assert_true "$rc" "skipping the conditional phase 1b-design should be legal"
-out=$("$SCRIPT" advance sk-1 2-implement skipped 2>&1); rc=$?
+prepare_test_ready sk-1
+out=$(advance_implementation sk-1 2-implement skipped 2>&1); rc=$?
 assert_true "$rc" "skipping the conditional phase 1c-security should be legal, and enter_requires should accept it"
 sf="$D/.shode-house/state/sk-1.json"
 assert_eq "$(jq -r '.phases["1b-design"].status' "$sf")" "skipped" "1b-design should end status=skipped"
@@ -694,16 +1570,17 @@ export WFSTATE_ROOT="$D"
 "$SCRIPT" advance esc-1 1a-spec     >/dev/null 2>&1
 "$SCRIPT" advance esc-1 1b-design   >/dev/null 2>&1
 "$SCRIPT" advance esc-1 1c-security >/dev/null 2>&1
-"$SCRIPT" advance esc-1 2-implement >/dev/null 2>&1
+prepare_test_ready esc-1
+advance_implementation esc-1 2-implement >/dev/null 2>&1
 # 4 fail-cycles between 2-implement <-> 3b-review to push iter past the cap (3)
 "$SCRIPT" advance esc-1 3b-review          >/dev/null 2>&1  # iter 0 (3b-review fresh)
-"$SCRIPT" advance esc-1 2-implement failed >/dev/null 2>&1  # iter 1
+WFSTATE_ACTOR=fresh-test-author-session-1 "$SCRIPT" advance esc-1 2-implement failed >/dev/null 2>&1  # iter 1
 "$SCRIPT" advance esc-1 3b-review          >/dev/null 2>&1  # iter 2
-"$SCRIPT" advance esc-1 2-implement failed >/dev/null 2>&1  # iter 3
+WFSTATE_ACTOR=fresh-test-author-session-2 "$SCRIPT" advance esc-1 2-implement failed >/dev/null 2>&1  # iter 3
 "$SCRIPT" advance esc-1 3b-review          >/dev/null 2>&1  # iter 4 (still allowed: pre-check used old iter=3)
 sf="$D/.shode-house/state/esc-1.json"
 assert_eq "$(jq -r '.iter' "$sf")" "4" "iter should now be 4 (past the cap of 3)"
-err=$("$SCRIPT" advance esc-1 2-implement failed 2>&1); rc=$?
+err=$(WFSTATE_ACTOR=fresh-test-author-session-3 "$SCRIPT" advance esc-1 2-implement failed 2>&1); rc=$?
 assert_false "$rc" "a normal advance must be blocked once iter exceeds the cap"
 assert_contains "$err" "iter>3 requires escalated transition first" "rejection reason should name the iter-cap rule"
 out=$("$SCRIPT" advance esc-1 3b-review escalated 2>&1); rc=$?

@@ -649,7 +649,7 @@ jobs:
             if [ "$3" -eq 0 ]; then ok "$1"
             elif [ $REQ4 -eq 1 ]; then err "$1 (required from 4.0.0):"; echo "$2" | head -20
             else printf '  ~ advisory (%s required from 4.0.0): %s finding(s)\n' "$1" "$(echo "$2" | grep -c .)"; echo "$2" | head -20 | sed 's/^/      /'; fi; }
-          for t in test_agent_tools_pin test_skill_names test_shipped_text_lint test_floor test_gate27_wiring test_ci_wiring test_ux_design_runbooks test_eval_runners test_reference_toc test_core_roster test_probes_401 test_battery_401; do   # test_floor: R45; test_ux_design_runbooks: R68/S7-1; test_reference_toc: U23-5; test_core_roster: 4.0.1 roster/routing/review-card/hook-key gates (always required); test_probes_401: pre-registered E19/E20 probes + no-fable-dispatch scorer
+          for t in test_agent_tools_pin test_skill_names test_shipped_text_lint test_floor test_gate27_wiring test_ci_wiring test_ux_design_runbooks test_eval_runners test_reference_toc test_core_roster test_probes_401 test_battery_401 test_battery_402; do   # test_floor: R45; test_ux_design_runbooks: R68/S7-1; test_reference_toc: U23-5; test_core_roster: 4.0.1 roster/routing/review-card/hook-key gates (always required); test_probes_401: pre-registered E19/E20 probes + no-fable-dispatch scorer
             python3 tests/$t.py >/dev/null 2>&1 || { err "tests/$t.py red (unit/mutation tests always required; from 4.0.0 also the tree):"; python3 tests/$t.py 2>&1 | grep -E '^(FAIL|ERROR)'; }
           done
           a1=$(python3 tests/test_agent_tools_pin.py --scan 2>&1); v4tree "A1 tools pin" "$a1" $?
@@ -718,6 +718,11 @@ jobs:
             if w9h=$(bash eval/scenarios/battery-4.0.1/check-freeze.sh 2>&1); then ok "W9 $w9h"
             else err "W9 battery-4.0.1 freeze red (bash eval/scenarios/battery-4.0.1/check-freeze.sh):"; echo "$w9h" | head -10; fi
           else err "W9 battery-4.0.1 freeze: eval/scenarios/battery-4.0.1/check-freeze.sh missing -- NOT CHECKED (required in every mode)"; fi
+          # 4.0.2 coordinated-logger routing-probe battery, additive to immutable 4.0.1 history; required in every mode
+          if [ -f eval/scenarios/battery-4.0.2/check-freeze.sh ]; then
+            if w9i=$(bash eval/scenarios/battery-4.0.2/check-freeze.sh 2>&1); then ok "W9 $w9i"
+            else err "W9 battery-4.0.2 freeze red (bash eval/scenarios/battery-4.0.2/check-freeze.sh):"; echo "$w9i" | head -10; fi
+          else err "W9 battery-4.0.2 freeze: eval/scenarios/battery-4.0.2/check-freeze.sh missing -- NOT CHECKED (required in every mode)"; fi
           w9s=""
           for d in eval/v4-security/tests eval/shadow-floor/tests; do
             if [ -d "$d" ]; then w9s="$w9s $d"; else err "W9 eval suite: $d missing -- NOT CHECKED (required in every mode)"; fi

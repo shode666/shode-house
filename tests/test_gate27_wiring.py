@@ -9,8 +9,9 @@
   `run: |` block) still finds the gate; the in-gate fallback uses a private venv, never `pip --user`.
 - Chris W1 follow-up C-7 / Sentinel F6: the fallback installs from the same hash-pinned file, and its temp dir
   is removed in every case, also when pip fails.
-- W9 wiring (bd v7u.4.7): gate #27 also runs eval/scenarios/core-4.0/check-freeze.sh and the eval/v4-security +
-  eval/shadow-floor pytest suites, required in every mode; a missing script or suite is red.
+- W9 wiring (bd v7u.4.7; shode-house-nl7): gate #27 also runs the historical 4.0/4.0.1 freeze checks,
+  the active 4.0.2 battery freeze check, and the eval/v4-security + eval/shadow-floor pytest suites,
+  required in every mode; a missing script or suite is red and each battery revision has its own label.
 Run: python3 tests/test_gate27_wiring.py   (CI gate #27 runs it; stdlib + bash)
 """
 import os
@@ -208,7 +209,7 @@ class A15WiringTest(unittest.TestCase):
 
 
 class W9WiringTest(unittest.TestCase):
-    """bd v7u.4.7 W9 wiring: core-4.0 freeze + the two eval pytest suites run in gate #27, required in every mode."""
+    """W9 wiring: historical + active freezes and the two eval suites run in #27 in every mode."""
 
     def stub_tree(self, root, freeze_rc=0, suite_ok=True):
         (root / "tests").mkdir()
@@ -222,6 +223,9 @@ class W9WiringTest(unittest.TestCase):
         freeze3 = root / "eval/scenarios/battery-4.0.1/check-freeze.sh"    # 4.0.1: the routing-probe battery has its own freeze check
         freeze3.parent.mkdir(parents=True)
         freeze3.write_text('echo "battery-4.0.1 freeze stub"; exit 0\n')
+        freeze4 = root / "eval/scenarios/battery-4.0.2/check-freeze.sh"    # active protocol, separately identified
+        freeze4.parent.mkdir(parents=True)
+        freeze4.write_text('echo "battery-4.0.2 freeze stub"; exit 0\n')
         for d in ("eval/v4-security/tests", "eval/shadow-floor/tests"):
             (root / d).mkdir(parents=True)
         (root / "eval/v4-security/tests/test_w9_stub_a.py").write_text("def test_a():\n    assert True\n")
@@ -237,6 +241,7 @@ class W9WiringTest(unittest.TestCase):
         for needle in ("W9 core-4.0 freeze: eval/scenarios/core-4.0/check-freeze.sh missing -- NOT CHECKED",
                        "W9 core-4.0.1 freeze: eval/scenarios/core-4.0.1/check-freeze.sh missing -- NOT CHECKED",
                        "W9 battery-4.0.1 freeze: eval/scenarios/battery-4.0.1/check-freeze.sh missing -- NOT CHECKED",
+                       "W9 battery-4.0.2 freeze: eval/scenarios/battery-4.0.2/check-freeze.sh missing -- NOT CHECKED",
                        "W9 eval suite: eval/v4-security/tests missing -- NOT CHECKED",
                        "W9 eval suite: eval/shadow-floor/tests missing -- NOT CHECKED"):
             with self.subTest(needle=needle):
@@ -245,7 +250,8 @@ class W9WiringTest(unittest.TestCase):
     def test_each_missing_w9_part_alone_is_red(self):
         """FU-4: one part missing, the other two present and green -> still red, from that part's own err line."""
         for missing in ("eval/scenarios/core-4.0/check-freeze.sh", "eval/scenarios/core-4.0.1/check-freeze.sh",
-                        "eval/scenarios/battery-4.0.1/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
+                        "eval/scenarios/battery-4.0.1/check-freeze.sh",
+                        "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory() as tmp:
                 root = pathlib.Path(tmp)
                 env = this_python_env(root)
@@ -260,7 +266,7 @@ class W9WiringTest(unittest.TestCase):
                 self.assertNotRegex(out, r"(?m)^  X (?!W9 [^\n]*" + re.escape(missing) + ")", out)  # nothing else red
 
     def test_ci_wiring_and_the_other_unit_suites_are_in_the_always_required_loop(self):
-        """Chris W10a-C5: CI runs tests/test_ci_wiring.py (and the other eight) only from #27's loop; dropping one
+        """Chris W10a-C5: CI runs the invariant suites only from #27's loop; dropping one
         from the list would stop checking it and stay green."""
         lines = gate_script()
         loop = [l for l in lines if re.match(r"for t in test_[\w ]+; do", l)]
@@ -269,7 +275,8 @@ class W9WiringTest(unittest.TestCase):
         names = re.match(r"for t in ([\w ]+); do", loop[0]).group(1).split()
         self.assertEqual(["test_agent_tools_pin", "test_skill_names", "test_shipped_text_lint", "test_floor",
                           "test_gate27_wiring", "test_ci_wiring", "test_ux_design_runbooks", "test_eval_runners",
-                          "test_reference_toc", "test_core_roster", "test_probes_401", "test_battery_401"], names)
+                          "test_reference_toc", "test_core_roster", "test_probes_401", "test_battery_401",
+                          "test_battery_402"], names)
         for name in names:
             self.assertTrue((ROOT / "tests" / f"{name}.py").is_file(), name)
         self.assertIn('python3 tests/$t.py >/dev/null 2>&1 || { err "tests/$t.py red', body)
@@ -289,6 +296,7 @@ class W9WiringTest(unittest.TestCase):
                     self.assertIn("ok W9 core-4.0 freeze stub", out)
                     self.assertIn("ok W9 core-4.0.1 freeze stub", out)
                     self.assertIn("ok W9 battery-4.0.1 freeze stub", out)
+                    self.assertIn("ok W9 battery-4.0.2 freeze stub", out)
                     self.assertRegex(out, r"ok W9 eval suites \(2 passed")
                 else:
                     self.assertIn("fail=1", out, out)
@@ -297,9 +305,25 @@ class W9WiringTest(unittest.TestCase):
     def test_w9_runs_the_real_paths(self):
         w9 = w9_block()
         for path in ("eval/scenarios/core-4.0/check-freeze.sh", "eval/scenarios/core-4.0.1/check-freeze.sh",
-                     "eval/scenarios/battery-4.0.1/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
+                     "eval/scenarios/battery-4.0.1/check-freeze.sh",
+                     "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
             self.assertIn(path, w9)
             self.assertTrue((ROOT / path).exists(), path)
+
+    def test_agents_ci27_names_historical_and_active_battery_gates(self):
+        """The repo invariant keeps 4.0.1 immutable while naming 4.0.2 as a separate active gate."""
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        paragraph = re.search(r"(?ms)^- CI #27 \(v4 gates\).*?(?=\n\n)", agents)
+        self.assertIsNotNone(paragraph, "AGENTS.md has no CI #27 invariant")
+        invariant = paragraph.group(0)
+        for revision in ("4.0.1", "4.0.2"):
+            with self.subTest(revision=revision):
+                self.assertIn(f"`eval/scenarios/battery-{revision}/check-freeze.sh`", invariant)
+                self.assertIn(f"test_battery_{revision.replace('.', '')}", invariant)
+        historical = invariant.find("battery-4.0.1")
+        active = invariant.find("battery-4.0.2")
+        if historical >= 0 and active >= 0:
+            self.assertLess(historical, active, "historical and active battery gates need separate revision labels")
 
 
 if __name__ == "__main__":

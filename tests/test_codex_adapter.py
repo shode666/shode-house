@@ -57,6 +57,8 @@ class CodexPackageTest(unittest.TestCase):
             ".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", "plugin.json", "HOST-NOTES.md",
             "skills/ask/SKILL.md", "knowledge/skills/workflow/ask/SKILL.md",
             "agents/verify.md", "knowledge/agents/verify.md",  # remove inherited trailing whitespace
+            "knowledge/references/state-machine/rework-routing.json",
+            "knowledge/references/design-intel/scripts/design_run.py",
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(

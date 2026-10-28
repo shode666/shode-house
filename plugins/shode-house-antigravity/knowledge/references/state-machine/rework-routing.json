@@ -5,6 +5,7 @@
     "code": "2-implement",
     "perf": "2-implement",
     "security": "2-implement",
+    "test-defect": "2-implement",
     "ui": "1b-design",
     "design": "1b-design",
     "spec": "1a-spec",

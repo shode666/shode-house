@@ -64,6 +64,20 @@ redact_fail() { echo "!! STOPPED: redaction failed ($*). Fail-closed: no further
 python3 "$REDACT" selftest || redact_fail "selftest"
 
 CORE_ID=""
+runner_pid=$$
+# With monitor mode below, the in-flight job has its own process group. Preserve run_one's `kill -s SIG 0` meaning:
+# notify this runner as well as the isolated job group.
+kill() {
+  if [ "$#" -eq 3 ] && [ "$1" = -s ] && [ "$3" = 0 ]; then
+    command kill -s "$2" "$runner_pid" 2>/dev/null
+    command kill -s "$2" 0
+  elif [ "$#" -eq 3 ] && [ "$1" = -s ] && [ "$3" = "$runner_pid" ] && [ "${in_run_job:-0}" = 1 ]; then
+    command kill -s "$2" "$runner_pid" 2>/dev/null
+    command kill -STOP 0   # do not let the signalling job start more work before the runner's trap stops its group
+  else
+    command kill "$@"
+  fi
+}
 # The bash on PATH, by path: run_one runs as a job (see "isolate"), and bash 3.2 runs `command bash ...` in a function of
 # a job with exec and no fork, so the job itself would become the fixture script and run_one would end there with 0.
 BASH_BIN="$(type -P bash)" || BASH_BIN="$BASH"
@@ -83,7 +97,15 @@ OUT="$(cd "$OUT" && pwd -P)"
 python3 "$REDACT" lockdown "$OUT" || { echo "!! STOPPED: the out-dir cannot be made owner-only (reason above). Nothing ran." >&2
   echo "!! Inspect it by hand (ls -laR), or start a NEW out-dir." >&2; exit 4; }
 [ -f "$OUT/SUMMARY.tsv" ] || printf 'id\trun\tmodel\tverdict\texit\tstate\troute\tseconds\tdir\n' > "$OUT/SUMMARY.tsv"
-exec > >(tee -a "$OUT/log.txt") 2>&1   # the console + log; run_one's job never holds it (see "isolate")
+log_fifo="$OUT/.log-fifo.$$"
+mkfifo "$log_fifo" || redact_fail "cannot create logger FIFO"
+tee -a "$OUT/log.txt" < "$log_fifo" & tee_pid=$!
+exec > "$log_fifo" 2>&1   # the console + log; run_one's job never holds it (see "isolate")
+rm -f "$log_fifo"
+# The explicit FIFO works where /dev/fd process substitution is unavailable. Close the writer and wait for tee before
+# returning so callers can read a complete log as soon as this script exits (including fail-closed and signal exits).
+finish_log() { local rc=$?; exec 1>&- 2>&-; wait "$tee_pid" 2>/dev/null || :; return "$rc"; }
+trap finish_log EXIT
 echo "== $(utc) core batch set=$CORE_LABEL ($CORE) model=$MODEL plugin=${PLUGIN_REF:-WORKTREE}@${PLUGIN_SHA:0:7} ids: $IDS"
 
 PENDING="$OUT/.redact-pending" PENDOUT="$OUT/.redact-pending.out"
@@ -99,13 +121,21 @@ pending_target() {   # the run named in .redact-pending: one plain name, a direc
   printf '%s\n' "$OUT/$name"
 }
 RUN_PID=""
-stop_run() {   # stop the run_one job in flight: frozen first (it starts nothing new), then its children, then itself
+stop_run() {   # stop the isolated run_one process group in flight: frozen first so it starts nothing new
   [ -n "$RUN_PID" ] || return 0
-  kill -STOP "$RUN_PID" 2>/dev/null; pkill -TERM -P "$RUN_PID" 2>/dev/null
-  kill -TERM "$RUN_PID" 2>/dev/null; kill -CONT "$RUN_PID" 2>/dev/null; wait "$RUN_PID" 2>/dev/null; RUN_PID=""
+  command kill -STOP -"$RUN_PID" 2>/dev/null
+  command kill -TERM -"$RUN_PID" 2>/dev/null
+  command kill -CONT -"$RUN_PID" 2>/dev/null
+  wait "$RUN_PID" 2>/dev/null
+  RUN_PID=""
 }
 # notice <text>: to the console; when that pipe is gone (TERM/HUP to the whole group also ends tee), into log.txt
-notice() { printf '%s\n' "$1" 2>/dev/null || printf '%s\n' "$1" >> "$OUT/log.txt"; }
+notice() {
+  # A write to a pipe whose reader just died may still succeed into the kernel buffer. Persist the signal notice
+  # directly as well; duplicate log lines are preferable to losing the only interruption warning.
+  printf '%s\n' "$1" 2>/dev/null || :
+  printf '%s\n' "$1" >> "$OUT/log.txt"
+}
 on_signal() {   # $1 name, $2 exit status. Stop the run, redact first, report second (the console may be gone).
   trap - INT TERM HUP; trap '' PIPE   # a write to a dead console must not turn the exit into SIGPIPE (Chris L-A)
   stop_run
@@ -151,8 +181,10 @@ for ID in $IDS; do
   printf '%s\n' "$(basename "$TARGET")" > "$PENDING.tmp" && mv -f "$PENDING.tmp" "$PENDING" || redact_fail "cannot write $PENDING"
   echo "== $(utc) $ID -> $TARGET (its console output is printed after redaction)"
   RUN_T0=$SECONDS
-  run_one "$ID" "$MODEL" "$TARGET" > "$PENDOUT" 2>&1 &   # console output held back until it is redacted ("isolate")
-  RUN_PID=$!; wait "$RUN_PID"; RC=$?; RUN_PID=""
+  set -m
+  in_run_job=1 run_one "$ID" "$MODEL" "$TARGET" > "$PENDOUT" 2>&1 &   # held until redacted ("isolate")
+  RUN_PID=$!; set +m
+  wait "$RUN_PID"; RC=$?; RUN_PID=""
   CORE_ID=""
   seal "$TARGET" || redact_fail "$TARGET"
   rm -f "$PENDING"; flush

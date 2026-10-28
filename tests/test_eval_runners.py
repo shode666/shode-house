@@ -357,6 +357,8 @@ run_one() {
         self.assert_no_token(self.out / "SUMMARY.tsv", self.out / "log.txt", text=done.stdout + done.stderr)
         self.assertEqual([(r["id"], r["verdict"], r["exit"]) for r in self.rows()], [("E02", "FAIL", "1"), ("E03", "FAIL", "1")])
         self.assertIn("first skill=x --token <REDACTED>", (self.out / "log.txt").read_text())
+        self.assertEqual((self.out / "log.txt").read_text().splitlines().count(
+            "== E02 FAIL (first skill=x --token <REDACTED>"), 1, "a completed run is logged exactly once")
 
     def test_sigterm_between_write_and_redaction_then_resume(self):
         (self.repo / "signal.E02").write_text("TERM")
@@ -377,6 +379,8 @@ run_one() {
         self.assertEqual(self.calls(), ["E02", "E03"], "E02 is complete: kept, never re-run")
         self.assert_no_token(self.out / "SUMMARY.tsv", self.out / "log.txt", text=resumed.stdout + resumed.stderr)
         self.assertIn("first skill=x --token <REDACTED>", resumed.stdout, "the buffered console output is printed redacted")
+        self.assertEqual((self.out / "log.txt").read_text().splitlines().count(
+            "== E02 FAIL (first skill=x --token <REDACTED>"), 1, "an interrupted run is logged exactly once after resume")
 
     def test_signal_to_the_whole_process_group_exits_with_its_status_not_sigpipe(self):
         """Chris final L-A: TERM or HUP to the runner's process group (a terminal hangup, kill -TERM -<pgid>) also ends

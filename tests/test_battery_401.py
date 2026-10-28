@@ -364,6 +364,86 @@ class RunnerWiringTest(unittest.TestCase):
         (d / "python3").chmod(0o700)
         return dict(PATH=str(d) + os.pathsep + os.environ.get("PATH", ""))
 
+    def logger_transition_log(self, live_states):
+        """Run two distinct pending buffers in this process; a live sink durably mirrors stdout into log.txt."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("battery_logger_transition_redactor", ROOT / "eval/redact_derived.py")
+        redactor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(redactor)
+        redactor.LOGGER_OBSERVE_SECONDS = 0.02
+
+        out = self.tmp / ("logger-transition-" + "-".join("live" if state else "fallback" for state in live_states))
+        out.mkdir(mode=0o700)
+        batch = out / "BATCH.json"
+        batch.write_text('{"battery":"4.0.1"}\n', encoding="utf-8")
+        batch.chmod(0o600)
+        log = out / "log.txt"
+        log.write_bytes(b"")
+        log.chmod(0o600)
+        batch_sha = hashlib.sha256(batch.read_bytes()).hexdigest()
+        log_identity = (log.stat().st_dev, log.stat().st_ino)
+
+        class LoggerSink:
+            live = False
+            buffer = None
+
+            def __init__(self):
+                self.buffer = self
+
+            def write(self, payload):
+                if self.live:
+                    with open(log, "ab", buffering=0) as stream:
+                        self.assert_full_write(stream.write(payload), len(payload))
+                        os.fsync(stream.fileno())
+                return len(payload)
+
+            @staticmethod
+            def assert_full_write(written, expected):
+                if written != expected:
+                    raise AssertionError(f"short logger write: {written} != {expected}")
+
+            @staticmethod
+            def flush():
+                return None
+
+        sink = LoggerSink()
+        redactor.sys = type("LoggerTransitionSys", (), {"stdout": sink})()
+        pending = out / ".redact-pending.out"
+        inodes = []
+        parent_pid = os.getppid()
+        for number, logger_live in enumerate(live_states, 1):
+            staged = out / f".pending-{number}"
+            staged.write_text(f"LOGGER-EVENT-{number}\n", encoding="utf-8")
+            staged.chmod(0o600)
+            os.replace(staged, pending)
+            inodes.append(pending.stat().st_ino)
+            sink.live = logger_live
+            self.assertEqual(parent_pid, os.getppid(), "both buffers run under the same parent process")
+            redactor.persist_battery_console_if_logger_unavailable(str(pending))
+            sink.write(pending.read_bytes())       # eval/run-battery-4.0.1.sh flushes the redacted buffer through stdout
+            sink.flush()
+
+        self.assertEqual(2, len(set(inodes)), "the transition uses two distinct pending-buffer files")
+        self.assertEqual(batch_sha, hashlib.sha256(batch.read_bytes()).hexdigest(), "logger recovery never rewrites BATCH.json")
+        self.assertEqual(log_identity, (log.stat().st_dev, log.stat().st_ino), "logger recovery appends without replacing log.txt")
+        for path in (out, batch, log, pending):
+            want = 0o700 if path.is_dir() else 0o600
+            self.assertEqual(want, stat.S_IMODE(path.stat().st_mode), str(path))
+            if path.is_file():
+                self.assertEqual(1, path.stat().st_nlink, str(path))
+        return log.read_text(encoding="utf-8")
+
+    def test_logger_live_to_fallback_logs_the_second_distinct_pending_buffer_exactly_once(self):
+        text = self.logger_transition_log((True, False))
+        self.assertEqual(1, text.count("LOGGER-EVENT-1"), "the live logger owns event 1 exactly once")
+        self.assertEqual(1, text.count("LOGGER-EVENT-2"), "fallback must durably preserve event 2 exactly once")
+
+    def test_logger_fallback_to_live_logs_the_second_distinct_pending_buffer_exactly_once(self):
+        text = self.logger_transition_log((False, True))
+        self.assertEqual(1, text.count("LOGGER-EVENT-1"), "fallback owns event 1 exactly once")
+        self.assertEqual(1, text.count("LOGGER-EVENT-2"), "the recovered live logger must own event 2 exactly once")
+
     def test_an_interrupted_batch_is_resealed_before_any_run_and_its_console_output_is_redacted_and_flushed(self):
         """Standards M1 (a): .redact-pending + .redact-pending.out left by a killed invocation are sealed first, then the batch goes on."""
         out = self.tmp / "resume"
@@ -390,7 +470,8 @@ class RunnerWiringTest(unittest.TestCase):
         for name in ("log.txt", "SUMMARY.tsv", "AGG.tsv"):
             self.assertNotIn(self.TOKEN, (out / name).read_text(encoding="utf-8"), name)
         self.assertNotIn(self.TOKEN, text)
-        self.assertIn("INTERRUPTED-CONSOLE-LINE", (out / "log.txt").read_text(encoding="utf-8"))
+        self.assertEqual(1, (out / "log.txt").read_text(encoding="utf-8").count("INTERRUPTED-CONSOLE-LINE"),
+                         "the interrupted console line is durably logged exactly once before the runner returns")
         self.assertEqual([], [p.name for p in out.rglob(".redact*")], "marker and buffer are gone")
         # a buffer with no marker (killed after the seal, before the flush) is redacted and flushed too
         (out / ".redact-pending.out").write_text("LONE-BUFFER-LINE " + self.TOKEN + "\n", encoding="utf-8")
