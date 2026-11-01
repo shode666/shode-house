@@ -1,13 +1,13 @@
 {
   "name": "shode-house",
-  "version": "4.0.1",
-  "description": "Multi-agent software house team v4.0.1: 6 agent types + 20 skills (ask = entry). Team execution on Claude Code; on Codex, Cursor and Antigravity skills run in one session.",
+  "version": "4.1.0",
+  "description": "Shode House 4.1.0: 6 agent types for Claude Code plus a portable Codex coordinator with lifecycle hooks; Cursor and Antigravity remain skills-first adapters.",
   "author": {
     "name": "shode666",
     "url": "https://github.com/shode666"
   },
-  "homepage": "https://github.com/shode666/claude-skill-shode-house",
-  "repository": "https://github.com/shode666/claude-skill-shode-house",
+  "homepage": "https://github.com/shode666/shode-house",
+  "repository": "https://github.com/shode666/shode-house",
   "license": "MIT",
   "keywords": [
     "software-house",

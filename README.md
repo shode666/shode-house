@@ -2,7 +2,14 @@
 
 <p align="center"><img src="docs/assets/shode-house-team.jpg" alt="Shode House team (3.x artwork: 19 AI specialists in 7 teams): Lead, Product & Design, Development, Quality & Security, DevOps & Operations, Domain Experts" width="900"></p>
 
-**4.0.1** — 18 agent types become **6**: `plan`, `build`, `verify`, `operate`, `secure`, `design`. The main session is the
+**4.1.0** is a backward-compatible feature release for durable, test-first long-running work on the six-role architecture introduced in 4.0.1.
+It binds workflow mutations to authoritative session provenance, keeps test authors separate from implementers, adds the
+frozen 4.0.2 coordinated-logger battery, and packages a first-class portable Codex coordinator and lifecycle hooks. Claude
+Code still uses its router style and native registered agents; Codex uses the generated `ask` coordinator only when genuine
+separate-worker delegation is available. Codex shell/model/tool/scope isolation remains advisory, and live installed-host
+acceptance is not claimed. Release notes: [CHANGELOG](CHANGELOG.md) 4.1.0.
+
+**4.0.1** changed 18 agent types into **6**: `plan`, `build`, `verify`, `operate`, `secure`, `design`. The main session is the
 **router** (the plugin's output style `output-styles/shode-house.md`, forced by the plugin): it routes, gates, relays and
 closes. Agents are spawned as `shode-house:<id>`; the 7 domain experts are domain references
 (`references/domain/<domain>.md`) loaded by a `plan` spawn through `domain-core`, not agents. There are 20 skills
@@ -11,8 +18,7 @@ agent body and the router style (`scripts/floor.py --check --require`). **Breaki
 stub agent files) — see § Migration from 4.0.0 below; the 4.0.1 number was fixed by the maintainer. Claude Code uses the
 router style and native registered agents. Codex structurally packages `ask` as a coordinator for genuine separate workers,
 with trusted Python-backed lifecycle hooks for direct structured writes; Cursor remains an unverified one-session adapter and Antigravity packaging
-is deferred to a separate artifact. Release notes: [CHANGELOG](CHANGELOG.md)
-4.0.1. The 4.0.1 routing and review wiring is *designed*, not yet *measured* (see § What is designed vs what is measured).
+is a separate artifact. The 4.0.1 routing and review wiring is *designed*, not yet *measured* (see § What is designed vs what is measured).
 
 4.0.0 introduced the router style and the safety floor (the 3.x `orchestrator` agent and the `oliver` style were retired
 there).
@@ -25,13 +31,13 @@ removed); 3.16.1+ superseded 3.16.0, which shipped a single-skill package withou
 > router (main session) + 6 agent type (+ domain reference 7 ชุด) ใน 7 ทีม ที่มี ownership ชัด, quality gate ที่ต้องมีหลักฐาน, token-aware context routing,
 > CI invariant ที่พิสูจน์ด้วย mutation test และ behavioral A/B eval
 
-[![Version](https://img.shields.io/badge/version-4.0.1%20unreleased-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![CI](https://github.com/shode666/claude-skill-shode-house/actions/workflows/ci.yml/badge.svg)](https://github.com/shode666/claude-skill-shode-house/actions/workflows/ci.yml)
+[![CI](https://github.com/shode666/shode-house/actions/workflows/ci.yml/badge.svg)](https://github.com/shode666/shode-house/actions/workflows/ci.yml)
 
 ครอบคลุม **ERP, Booking, Trading, Fintech, Insurance, E-commerce, SAP, UX/UI** + polyglot 14 languages · ภาษาไทยเป็นหลัก
 
-**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.0.0** (4.0.1 ยังไม่ release — รอ review, วัดผล และการตัดสินใจของ maintainer) · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
+**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.1.0** · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
 
 ---
 
@@ -166,7 +172,7 @@ Package source for every host: `plugins/shode-house` (generated from this repo b
 
 ### Claude Code (CLI/terminal)
 ```bash
-/plugin marketplace add shode666/claude-skill-shode-house
+/plugin marketplace add shode666/shode-house
 /plugin install shode-house@shode-house
 ```
 Entry: `/shode-house:ask <request>` — the router style runs the main session and dispatches the specialists.
@@ -204,7 +210,7 @@ check it with `python3 scripts/pack-team.py --host antigravity --check plugins/s
 /plugin marketplace update shode-house
 /plugin update shode-house@shode-house      # `install` alone keeps the already-installed version
 ```
-Check with `/plugin list` — the version must read 4.0.0.
+Check with `/plugin list` — the version must read 4.1.0.
 
 Prerequisites: **`jq` is required for hook enforcement** (`brew install jq` / `apt install jq`); on macOS the scope guard also uses the base-system `/usr/bin/perl` with `Unicode::Normalize`. Every Claude Code session starts with one status line from the SessionStart hook: **`ENFORCED`** only when jq runs a test program of the guards' kind and every guard prerequisite is present; **`ADVISORY-ONLY`** otherwise, naming the missing or broken dependency, and then the Write/Edit scope and state guards are **not** enforced (fix it and start a new session). The status line is a report, not a control, and ENFORCED is still defence in depth, not a guarantee (§ Security notes — hooks). Optional: `brew install node` (Context7 MCP ใช้ npx) · `brew install beads` (task tracker `bd`)
 

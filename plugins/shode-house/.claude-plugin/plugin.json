@@ -1,12 +1,12 @@
 {
   "name": "shode-house",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "author": {
     "name": "shode666",
     "url": "https://github.com/shode666"
   },
-  "homepage": "https://github.com/shode666/claude-skill-shode-house",
-  "repository": "https://github.com/shode666/claude-skill-shode-house",
+  "homepage": "https://github.com/shode666/shode-house",
+  "repository": "https://github.com/shode666/shode-house",
   "license": "MIT",
   "description": "Shode House: full expert team on Claude Code; skills-only, single session on Cursor.",
   "skills": "./skills/",

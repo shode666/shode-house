@@ -33,7 +33,7 @@ Use non-interactive shell operations in automated workflows; `cp`, `mv`, and `rm
 - `apt-get`: `-y`; `brew`: `HOMEBREW_NO_AUTO_UPDATE=1`
 - `bd`: never `bd edit` (opens an editor); use `bd update` flags
 
-## Repo Invariants (v4.0.1)
+## Repo Invariants (v4.1.0)
 
 > ทุก rule = invariant ที่ script ตรวจ. จะแหก → แก้ script ก่อน
 

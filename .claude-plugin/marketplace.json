@@ -9,8 +9,8 @@
     {
       "name": "shode-house",
       "source": "./plugins/shode-house",
-      "description": "Shode House 4.0.1: router style + 6 agent types, 20 skills, independent review.",
-      "version": "4.0.1",
+      "description": "Shode House 4.1.0: 6 agent types, 20 skills, durable workflow and independent review.",
+      "version": "4.1.0",
       "category": "agents",
       "tags": [
         "agents",

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "shode-house",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "description": "Shode House for Codex: coordinator, six role contracts, fresh review workers, and trusted Python-backed structured-write guards.",
   "skills": "./skills/",
   "extensions": {
@@ -18,7 +18,7 @@
           "Interactive",
           "Write"
         ],
-        "websiteURL": "https://github.com/shode666/claude-skill-shode-house",
+        "websiteURL": "https://github.com/shode666/shode-house",
         "defaultPrompt": [
           "Work with the Shode House team on this project."
         ]

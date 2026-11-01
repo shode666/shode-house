@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-11-01
+
+### Added
+
+- First-class portable Codex packaging: the generated root `plugin.json`, compatibility `.codex-plugin` manifest, `ask` coordinator and Python lifecycle hooks preserve the six role contracts while requiring genuine separate workers for test authoring, implementation and independent review. Codex shell, model, tool and scope isolation remains advisory; no live installed-host qualification is claimed.
+- A separately frozen battery 4.0.2 protocol with a coordinated logger and crash-recovery coverage. The historical 4.0.1 runner, manifest and baseline remain byte-pinned and its results are never mixed with 4.0.2 evidence.
+
+### Changed
+
+- Durable workflow validation now binds `test_ready`, rework and mutation records to authoritative session identity, actor ownership, phase and payload/state correlation. Missing, altered and unknown required fields fail closed, and the test author and implementer must be distinct sessions.
+- Claude Code and Codex package metadata now share version 4.1.0 and the canonical `shode666/shode-house` repository URL. This is a MINOR release because first-class portable Codex packaging adds backward-compatible public functionality after 4.0.1. Generated host trees remain host-specific: Claude Code has native agents and router style; Codex coordinates only where separate-worker delegation exists.
+
+### Fixed
+
+- Reliability fixtures now include valid authoritative `test_ready` evidence and distinct test-author/implementer sessions, matching the production workflow contract without weakening its guards.
+
+### Validation status
+
+- Static, unit, integration, freeze, generated-tree and packaging gates passed for the release bytes. Cowork drag-drop validation passed for the exact package SHA recorded in the release evidence. Live Claude/Codex behavioral acceptance remains a separate gate and is not implied by repository or package tests.
+
 ## [4.0.1] — 2026-10-11 (released by the maintainer after the Standards / Spec / Security review on one fixed point; the Cowork drag-drop test, W11, the routing-probe battery and the 4.0.1 scenarios have not been run — see Known limitations)
 
 ### Breaking — 18 agent types become 6; the old ids no longer resolve

@@ -33,6 +33,8 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+RELEASE_VERSION = "4.1.0"
+REPOSITORY_URL = "https://github.com/shode666/shode-house"
 APPROVED = ("build", "design", "operate", "plan", "secure", "verify")
 FABLE_PINNED = {"secure", "design"}
 DOMAINS = ("fintech", "erp", "sap", "trading", "insurance", "booking", "ecommerce")
@@ -129,6 +131,61 @@ class RosterTest(unittest.TestCase):
             self.assertNotRegex(d, r"\b18\b", d)
         self.assertRegex(plugin["description"], r"\b6 agent")
         self.assertEqual(plugin["version"], market["plugins"][0]["version"])
+
+    def test_release_metadata_is_consistent_for_claude_codex_and_marketplaces(self):
+        """The target release must not leave one host or catalogue on the prior version/repository."""
+        root_plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
+        claude_market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+        cursor_market = json.loads((ROOT / ".cursor-plugin/marketplace.json").read_text())
+
+        self.assertEqual(RELEASE_VERSION, root_plugin["version"])
+        self.assertEqual(REPOSITORY_URL, root_plugin["homepage"])
+        self.assertEqual(REPOSITORY_URL, root_plugin["repository"])
+        for name, market in (("Claude", claude_market), ("Cursor", cursor_market)):
+            plugin = next(p for p in market["plugins"] if p["name"] == "shode-house")
+            self.assertEqual(RELEASE_VERSION, plugin["version"], name)
+            self.assertIn(RELEASE_VERSION, plugin["description"], name)
+
+        generated = (
+            "plugins/shode-house/.claude-plugin/plugin.json",
+            "plugins/shode-house/.codex-plugin/plugin.json",
+            "plugins/shode-house/.cursor-plugin/plugin.json",
+            "plugins/shode-house/plugin.json",
+            "plugins/shode-house-antigravity/.claude-plugin/plugin.json",
+            "plugins/shode-house-antigravity/plugin.json",
+        )
+        for rel in generated:
+            manifest = json.loads((ROOT / rel).read_text())
+            self.assertEqual(RELEASE_VERSION, manifest["version"], rel)
+            for key in ("homepage", "repository", "websiteURL"):
+                if key in manifest:
+                    self.assertEqual(REPOSITORY_URL, manifest[key], f"{rel}:{key}")
+        codex_compat = json.loads((ROOT / "plugins/shode-house/.codex-plugin/plugin.json").read_text())
+        self.assertEqual(REPOSITORY_URL, codex_compat["interface"]["websiteURL"])
+        codex_portable = json.loads((ROOT / "plugins/shode-house/plugin.json").read_text())
+        self.assertEqual(
+            REPOSITORY_URL,
+            codex_portable["extensions"]["com.openai"]["interface"]["websiteURL"],
+        )
+
+        readme = (ROOT / "README.md").read_text()
+        changelog = (ROOT / "CHANGELOG.md").read_text()
+        host_notes = (ROOT / "plugins/shode-house/HOST-NOTES.md").read_text()
+        readme_release = "\n".join(readme.splitlines()[:60])
+        changelog_release = re.search(
+            rf"(?ms)^## \[{re.escape(RELEASE_VERSION)}\].*?(?=^## \[)", changelog,
+        )
+        self.assertIsNotNone(changelog_release)
+        changelog_release = changelog_release.group(0)
+        self.assertIn(f"version-{RELEASE_VERSION}-blue.svg", readme_release)
+        self.assertIn(f"release ล่าสุด **v{RELEASE_VERSION}**", readme_release)
+        self.assertNotRegex(readme_release, rf"(?i)\b{re.escape(RELEASE_VERSION)}\s+candidate\b")
+        self.assertNotRegex(readme_release, rf"(?i){re.escape(RELEASE_VERSION)}[^\n]*รอ[^\n]*publish")
+        self.assertRegex(changelog_release, rf"(?m)^## \[{re.escape(RELEASE_VERSION)}\] — 2026-11-01$")
+        self.assertNotRegex(changelog_release, r"(?i)\b(candidate|not tagged|not published)\b")
+        self.assertIn(f"the version must read {RELEASE_VERSION}", readme)
+        self.assertTrue(host_notes.startswith(f"# Shode House {RELEASE_VERSION} host notes\n"))
+        self.assertNotIn("github.com/shode666/claude-skill-shode-house", readme)
 
     def test_ci_model_whitelist_is_exactly_the_two_host_pinned_types(self):
         """SEC-4: CI #5's claude-fable-5 allow-list is secure + design and nothing else."""
