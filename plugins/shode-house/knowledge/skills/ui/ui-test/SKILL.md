@@ -76,10 +76,10 @@ plugin **ไม่ได้จัดหา** browser MCP และชื่อ t
 ## Selector Strategy (🔴)
 
 **Priority**:
-1. `data-testid` (`build` add ตอน implement) — stable
-2. ARIA role + accessible name (`getByRole('button', {name: 'Pay'})`)
-3. Text (i18n-aware: alias text key)
-4. ❌ CSS class / xpath (brittle — break เมื่อ CSS เปลี่ยน)
+1. ARIA role + accessible name (`getByRole('button', {name: 'Pay'})`) หรือ label
+2. Text (i18n-aware: alias text key)
+3. `data-testid` (`build` add ตอน implement) — explicit contract เมื่อ semantics ระบุ element ไม่พอ
+4. ❌ CSS class / XPath structure (brittle — break เมื่อ DOM/CSS เปลี่ยน)
 
 **Convention**: `data-testid="<feature>-<element>"` เช่น `checkout-pay-button`, `cart-item-row`
 

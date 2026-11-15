@@ -15,6 +15,7 @@ REQUIRED-BEFORE: design_artifact_written
 **Contents**
 
 - [Pattern choice](#pattern-choice)
+- [Interface quality critique](#interface-quality-critique)
 - [ขอบเขต](#ขอบเขต)
 - [Other routing rows](#other-routing-rows)
 - [Best Practices](#best-practices)
@@ -40,6 +41,14 @@ REQUIRED-BEFORE: design_artifact_written
 - Verify fit per platform + brand for the user's design system; report material constraints without overriding a settled preference
 - Mobile: iOS = HIG; Android = Material; cross-platform = headless tokens + platform-aware components
 
+## Interface quality critique
+
+For visual direction, critique, an "AI slop" concern, or final polish, read
+`references/design-intel/references/interface-quality.md`. Use its vocabulary to name
+the problem and its anti-slop prompts to inspect context. Do not ban a gradient, grid,
+texture, glass, card or icon treatment merely because models often overuse it; tie a
+finding to the product task, hierarchy, brand, accessibility or measured behavior.
+
 ## ขอบเขต
 
 ### 1. UX Research
@@ -56,7 +65,8 @@ REQUIRED-BEFORE: design_artifact_written
 
 ### 3. Visual / UI
 - Visual hierarchy (size/weight/color/contrast/space)
-- Typography: scale (1.25/1.333/1.5), line-height (body 1.4-1.6, heading 1.1-1.3)
+- Typography: scale and line-height chosen for the typeface, content and viewport;
+  inspect kerning, line length, optical alignment and tabular figures where applicable
 - Color: HSL/OKLCH, semantic + state
 - Spacing: 4-pt or 8-pt grid
 - Iconography: Lucide/Heroicons/Phosphor
@@ -97,8 +107,8 @@ Practical (2.1 AA):
 | Web | WAI-ARIA APG |
 
 ### 8. Motion
-- Easing: ease-in-out (default), ease-out (enter), ease-in (exit)
-- Duration: 150-250ms (small), 300-400ms (large)
+- Easing and duration follow distance, complexity, platform and user context
+- Interaction animation is interruptible, preserves state and respects reduced motion
 - Tools: Lottie, Framer Motion, Rive
 
 ## Other routing rows
@@ -117,6 +127,7 @@ Practical (2.1 AA):
 - **Consistency > creativity** — design system rules
 - **Content-first** — copy ก่อน layout
 - **Empty/loading/error/disabled** = first-class state ทุก component
+- Feedback tells the user what happened and the next available action; decoration never competes with the primary task
 - **Touch target ≥ 44×44** (HIG) / 48dp (Material)
 - **i18n-ready** — text expand 30%, RTL, locale
 - **Atomic design + token hierarchy**

@@ -274,8 +274,19 @@ class TeamEntryTest(unittest.TestCase):
         mcp = ("plugin **ไม่ได้จัดหา** browser MCP (`.mcp.json` มีแค่ Context7) และชื่อ tool ต่างกันตาม config ของผู้ใช้ "
                "→ บังคับ MCP ตรง ๆ = ออกแบบให้ block ด้วยของที่ agent ใช้ไม่ได้")
         self.assertIn(mcp.replace(" (`.mcp.json` มีแค่ Context7)", ""), lines)
+        selector_rewrites = {
+            "1. `data-testid` (Dave add ตอน implement) — stable":
+                "1. ARIA role + accessible name (`getByRole('button', {name: 'Pay'})`) หรือ label",
+            "2. ARIA role + accessible name (`getByRole('button', {name: 'Pay'})`)":
+                "2. Text (i18n-aware: alias text key)",
+            "3. Text (i18n-aware: alias text key)":
+                "3. `data-testid` (`build` add ตอน implement) — explicit contract เมื่อ semantics ระบุ element ไม่พอ",
+            "4. ❌ CSS class / xpath (brittle — break เมื่อ CSS เปลี่ยน)":
+                "4. ❌ CSS class / XPath structure (brittle — break เมื่อ DOM/CSS เปลี่ยน)",
+        }
         self.assertEqual([], [l for l in self._baseline_body_lines(d + "/SKILL.md")
-                              if self._neutral(l) not in lines and l not in (url, mcp)])
+                              if self._neutral(l) not in lines and l not in (url, mcp)
+                              and selector_rewrites.get(l) not in lines])
         self.assertIn("automation-patterns.md", (ROOT / d / "SKILL.md").read_text())
 
     def test_drain_router_keeps_invariants_in_root_and_moved_blocks_in_execution(self):

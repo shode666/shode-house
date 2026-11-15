@@ -85,7 +85,8 @@ E2E + integration = `verify` (runtime axis); unit = `verify` (standards axis). N
 - Speed: 5-30s; critical flow 100% (login/checkout/payment/claim/booking)
 - Tools: **Playwright** (recommended), Cypress, Detox/Appium (mobile)
 - Pattern: Page Object Model, data builder, **explicit wait** (ห้าม sleep), screenshot+video on failure
-- Selector priority: `data-testid` > ARIA role > text > CSS (last resort)
+- Selector priority: accessible role/name or label > visible text > `data-testid`
+  explicit contract > CSS/XPath structure (last resort)
 
 ### 3. Contract Testing (microservices)
 - **Pact** (consumer-driven), **Schemathesis** (OpenAPI fuzz)

@@ -9,8 +9,8 @@
     {
       "name": "shode-house",
       "source": "./plugins/shode-house",
-      "description": "Shode House 4.1.0: 6 agent types, 20 skills, durable workflow and independent review.",
-      "version": "4.1.0",
+      "description": "Shode House 4.2.0: contextual UX critique, Playwright flows and independent review.",
+      "version": "4.2.0",
       "category": "agents",
       "tags": [
         "agents",

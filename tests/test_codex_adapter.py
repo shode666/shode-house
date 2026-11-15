@@ -59,6 +59,11 @@ class CodexPackageTest(unittest.TestCase):
             "agents/verify.md", "knowledge/agents/verify.md",  # remove inherited trailing whitespace
             "knowledge/references/state-machine/rework-routing.json",
             "knowledge/references/design-intel/scripts/design_run.py",
+            "knowledge/references/design-intel/references/interface-quality.md",
+            "knowledge/references/runbooks/design-catalogue.md",
+            "knowledge/references/runbooks/design-phase-3a.md",
+            "knowledge/references/runbooks/verify-runtime.md",
+            "knowledge/skills/ui/ui-test/SKILL.md", "skills/ui-test/SKILL.md",
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(

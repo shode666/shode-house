@@ -3259,6 +3259,24 @@
         "keep required independent acceptance BLOCKED"
       ],
       "reason": "First-class Codex adapter: independent review is permitted only through genuine separate workers, with blocked acceptance retained when workers are unavailable."
+    },
+    {
+      "source": "agents/ux-ui-designer.md",
+      "old_fragment": "- Easing: ease-in-out (default), ease-out (enter), ease-in (exit)",
+      "replacement": "references/runbooks/design-catalogue.md",
+      "requires": [
+        "Easing and duration follow distance, complexity, platform and user context"
+      ],
+      "reason": "4.2.0 contextual UX guidance replaces one default easing recipe with a decision tied to distance, complexity, platform and user context; the motion requirement remains in the design-owned runbook."
+    },
+    {
+      "source": "agents/ux-ui-designer.md",
+      "old_fragment": "- Duration: 150-250ms (small), 300-400ms (large)",
+      "replacement": "references/runbooks/design-catalogue.md",
+      "requires": [
+        "Interaction animation is interruptible, preserves state and respects reduced motion"
+      ],
+      "reason": "4.2.0 contextual UX guidance replaces fixed timing numbers with an interruptibility, state-preservation and reduced-motion contract owned by the design runbook."
     }
   ]
 }

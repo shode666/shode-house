@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-11-15
+
+### Added
+
+- A lazy interface-quality critique card for the `design` role: precise typography, composition, affordance, feedback and motion vocabulary; optional background directions with brand, legibility, performance and reduced-motion constraints; and contextual anti-slop prompts that require concrete task, hierarchy, brand or accessibility harm instead of banning familiar aesthetics.
+- Focused regression coverage that keeps anti-slop review contextual and binds UX critique to observable critical-user-flow evidence.
+
+### Changed
+
+- Playwright selector guidance now follows user-facing semantics first: accessible role/name or label, then visible text, an explicit `data-testid` contract when semantics cannot identify the element, and CSS/XPath structure only as a last resort.
+- Critical UX flows now record the user's goal, start state, primary and edge/error/loading actions, visible outcome or recovery path, Playwright trace/screenshot plus console/network findings, and applicable axe/manual accessibility evidence.
+- Design guidance now treats kerning, line length, optical alignment, tabular figures, progressive disclosure, interruptible animation and useful state feedback as contextual design decisions rather than fixed numeric recipes.
+
+### Provenance and scope
+
+- Reviewed primary material from UI/UX Pro Max, Impeccable, Superpowers, Vercel AI SDK, Supabase Agent Skills and Playwright. No external plugin, skill, dependency or detector was installed or executed; shode-house remains the workflow and gate owner. The existing attributed MIT UI/UX Pro Max subset remains proposal data, and no Apache-2.0 Impeccable code was copied.
+
+### Validation status
+
+- Repository validation, independent fixed-point reviews and packaging results are recorded with the release preparation task. Cowork drag-drop remains a separately reported manual result.
+
 ## [4.1.0] — 2026-11-01
 
 ### Added

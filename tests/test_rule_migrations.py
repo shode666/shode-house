@@ -55,7 +55,7 @@ class MigrationTest(unittest.TestCase):
                 migrations.load(ROOT)
 
     def test_current_migrations_validate(self):
-        self.assertEqual(352, len(migrations.load(ROOT)))  # +2 first-class Codex adapter: style-only block becomes capability-based genuine-worker delegation while keeping fail-closed independent acceptance; v4.0.1 agent consolidation 18 -> 6 (shode-house-jni): 350 entries before this change
+        self.assertEqual(354, len(migrations.load(ROOT)))  # +2 v4.2 contextual motion guidance; +2 first-class Codex adapter; v4.0.1 agent consolidation 18 -> 6 (shode-house-jni): 350 entries before these changes
 
     def test_each_replacement_anchor_is_required(self):
         for item in self.data["migrations"]:

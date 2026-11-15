@@ -2,12 +2,11 @@
 
 <p align="center"><img src="docs/assets/shode-house-team.jpg" alt="Shode House team (3.x artwork: 19 AI specialists in 7 teams): Lead, Product & Design, Development, Quality & Security, DevOps & Operations, Domain Experts" width="900"></p>
 
-**4.1.0** is a backward-compatible feature release for durable, test-first long-running work on the six-role architecture introduced in 4.0.1.
-It binds workflow mutations to authoritative session provenance, keeps test authors separate from implementers, adds the
-frozen 4.0.2 coordinated-logger battery, and packages a first-class portable Codex coordinator and lifecycle hooks. Claude
-Code still uses its router style and native registered agents; Codex uses the generated `ask` coordinator only when genuine
-separate-worker delegation is available. Codex shell/model/tool/scope isolation remains advisory, and live installed-host
-acceptance is not claimed. Release notes: [CHANGELOG](CHANGELOG.md) 4.1.0.
+**4.2.0** is a backward-compatible UX/UI quality release on the durable six-role architecture. It gives `design` a
+contextual interface-critique vocabulary, treats AI-slop signals as prompts to inspect product harm rather than style bans,
+and aligns critical user-flow evidence with Playwright's user-facing locators and web-first assertions. Existing catalog
+data remains proposal-only; accessibility, rendered behavior and tool output remain the gates. Release notes:
+[CHANGELOG](CHANGELOG.md) 4.2.0.
 
 **4.0.1** changed 18 agent types into **6**: `plan`, `build`, `verify`, `operate`, `secure`, `design`. The main session is the
 **router** (the plugin's output style `output-styles/shode-house.md`, forced by the plugin): it routes, gates, relays and
@@ -31,13 +30,13 @@ removed); 3.16.1+ superseded 3.16.0, which shipped a single-skill package withou
 > router (main session) + 6 agent type (+ domain reference 7 ชุด) ใน 7 ทีม ที่มี ownership ชัด, quality gate ที่ต้องมีหลักฐาน, token-aware context routing,
 > CI invariant ที่พิสูจน์ด้วย mutation test และ behavioral A/B eval
 
-[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.2.0-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/shode666/shode-house/actions/workflows/ci.yml/badge.svg)](https://github.com/shode666/shode-house/actions/workflows/ci.yml)
 
 ครอบคลุม **ERP, Booking, Trading, Fintech, Insurance, E-commerce, SAP, UX/UI** + polyglot 14 languages · ภาษาไทยเป็นหลัก
 
-**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.1.0** · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
+**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.2.0** · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
 
 ---
 
@@ -210,7 +209,7 @@ check it with `python3 scripts/pack-team.py --host antigravity --check plugins/s
 /plugin marketplace update shode-house
 /plugin update shode-house@shode-house      # `install` alone keeps the already-installed version
 ```
-Check with `/plugin list` — the version must read 4.1.0.
+Check with `/plugin list` — the version must read 4.2.0.
 
 Prerequisites: **`jq` is required for hook enforcement** (`brew install jq` / `apt install jq`); on macOS the scope guard also uses the base-system `/usr/bin/perl` with `Unicode::Normalize`. Every Claude Code session starts with one status line from the SessionStart hook: **`ENFORCED`** only when jq runs a test program of the guards' kind and every guard prerequisite is present; **`ADVISORY-ONLY`** otherwise, naming the missing or broken dependency, and then the Write/Edit scope and state guards are **not** enforced (fix it and start a new session). The status line is a report, not a control, and ENFORCED is still defence in depth, not a guarantee (§ Security notes — hooks). Optional: `brew install node` (Context7 MCP ใช้ npx) · `brew install beads` (task tracker `bd`)
 
