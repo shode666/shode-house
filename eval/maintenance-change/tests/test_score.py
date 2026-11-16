@@ -227,7 +227,7 @@ def test_trust_boundary_representative_type_matrix(tmp_path):
 def test_17_readme_cli_and_preflight_not_run(tmp_path):
     readme=(ROOT/"README.md").read_text(); assert "<preregistration> <records.json> <evidence-root>" in readme
     runner=(ROOT/"runner.py").read_text(); assert "--capability" not in runner
-    r=subprocess.run([sys.executable,str(ROOT/"runner.py"),"--preflight"],capture_output=True,text=True); report=json.loads(r.stdout.splitlines()[-1]); assert report["status"]=="BLOCKED" and report["model_calls"]==0
+    r=subprocess.run([sys.executable,str(ROOT/"runner.py"),"--preflight"],capture_output=True,text=True); report=json.loads(r.stdout.splitlines()[-1]); assert r.returncode==0 and report["status"]=="BLOCKED" and report["errors"]==[] and report["model_calls"]==0
 
 def test_snapshot_schema_attribution_is_fail_closed(tmp_path):
     mutations=(
