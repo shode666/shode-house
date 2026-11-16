@@ -266,11 +266,12 @@ def test_implementer_served_model_and_batch_unknown_host(tmp_path):
     assert SCORE.score_batch([record(bundle(tmp_path,"ordinary-unscorable"),model_requested="wrong")],oracle(),tmp_path)["qualification"]=="INCOMPLETE"
 
 def test_real_capture_shape_and_three_argument_cli(tmp_path):
-    sample=REPO/"eval/shape-baseline/results/3.17.2-dryrun/S4/r1/raw/run.jsonl"; rows=load_lines(sample); init=next(x for x in rows if x.get("subtype")=="init"); result=next(x for x in rows if x.get("type")=="result")
-    meta_path=next((sample.parent/"transcript/subagents").glob("*.meta.json")); meta=json.loads(meta_path.read_text()); snaps=load_lines(sample.parent/"snap.jsonl")
-    assert init["claude_code_version"]=="2.1.286" and "timestamp" not in result
-    assert {"toolUseId","agentType","spawnDepth"} <= set(meta) and "agentId" not in meta and "sessionId" not in meta
-    assert any(x["event"]=="PreToolUse" and x["tool"]=="Agent" for x in snaps) and all(isinstance(x["ts"],(int,float)) for x in snaps)
+    shape=json.loads((ROOT/"fixture/real-capture-shape.json").read_text())
+    assert shape["run_init"]=={"type":"system","subtype":"init","claude_code_version":"2.1.286"}
+    assert shape["run_result"]=={"type":"result","timestamp_present":False}
+    assert {"toolUseId","agentType","spawnDepth"} <= set(shape["subagent_meta_keys"])
+    assert set(shape["subagent_meta_absent_keys"])=={"agentId","sessionId"}
+    assert shape["snapshot"]=={"has_agent_pre_tool_use":True,"timestamps_are_numeric":True}
     b=bundle(tmp_path,"cli-smoke"); records=tmp_path/"records.json"; records.write_text(json.dumps([record(b)])); r=subprocess.run([sys.executable,str(ROOT/"score.py"),str(ROOT/"preregistration-4.2.0.json"),str(records),str(tmp_path)],capture_output=True,text=True); assert r.returncode==0 and json.loads(r.stdout)["counts"]["PASS"]==1
     malformed=tmp_path/"manifest.json"; malformed.write_text("{"); r=subprocess.run([sys.executable,str(ROOT/"score.py"),str(malformed),str(records),str(tmp_path)],capture_output=True,text=True); assert r.returncode==2 and "error" in r.stderr.lower()
     (b/"manifest.json").write_text("{"); r=subprocess.run([sys.executable,str(ROOT/"score.py"),str(ROOT/"preregistration-4.2.0.json"),str(records),str(tmp_path)],capture_output=True,text=True); assert r.returncode==0 and json.loads(r.stdout)["counts"]["UNSCORABLE"]==1

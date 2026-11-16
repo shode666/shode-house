@@ -1,0 +1,28 @@
+{
+  "source": "redacted shape sampled from eval/shape-baseline/results/3.17.2-dryrun/S4/r1",
+  "run_init": {
+    "type": "system",
+    "subtype": "init",
+    "claude_code_version": "2.1.286"
+  },
+  "run_result": {
+    "type": "result",
+    "timestamp_present": false
+  },
+  "subagent_meta_keys": [
+    "agentType",
+    "description",
+    "requestNonInteractive",
+    "requestShape",
+    "spawnDepth",
+    "toolUseId"
+  ],
+  "subagent_meta_absent_keys": [
+    "agentId",
+    "sessionId"
+  ],
+  "snapshot": {
+    "has_agent_pre_tool_use": true,
+    "timestamps_are_numeric": true
+  }
+}
