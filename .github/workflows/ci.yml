@@ -724,7 +724,7 @@ jobs:
             else err "W9 battery-4.0.2 freeze red (bash eval/scenarios/battery-4.0.2/check-freeze.sh):"; echo "$w9i" | head -10; fi
           else err "W9 battery-4.0.2 freeze: eval/scenarios/battery-4.0.2/check-freeze.sh missing -- NOT CHECKED (required in every mode)"; fi
           w9s=""
-          for d in eval/v4-security/tests eval/shadow-floor/tests; do
+          for d in eval/v4-security/tests eval/shadow-floor/tests eval/maintenance-change/tests; do
             if [ -d "$d" ]; then w9s="$w9s $d"; else err "W9 eval suite: $d missing -- NOT CHECKED (required in every mode)"; fi
           done
           if [ -n "$w9s" ]; then

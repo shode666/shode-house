@@ -1,0 +1,39 @@
+{
+  "campaign": "shode-house-4.2.0-maintenance-change-1",
+  "exact_model": "claude-sonnet-5",
+  "claude_cli_versions": ["2.1.286"],
+  "roles": {
+    "implementer": {"subagent_type": "build", "delegation_marker": "maintenance-implementer"},
+    "reviewer": {"subagent_type": "verify", "delegation_marker": "maintenance-reviewer"}
+  },
+  "reviewer_edit_policy": {
+    "edit_tools": ["Edit", "Write", "MultiEdit", "NotebookEdit"],
+    "snapshot_tools": ["Task", "Agent", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"],
+    "pre_post_tools": ["Task", "Agent", "Bash"],
+    "post_only_tools": ["Edit", "Write", "MultiEdit", "NotebookEdit"],
+    "read_only_tools": ["Read", "Grep", "Glob"]
+  },
+  "arms": {
+    "candidate": {"revision": "4.2.0-fixed-revision", "runs": 5},
+    "baseline": {"revision": "v4.0.0", "runs": 5}
+  },
+  "prompt_sha256": "0dc127d5e76601672a0e1ede806e910f4ab005734abef790f46c65102659c76c",
+  "scenario_sha256": "bfdbb24e5dcc438d6509f45cb155ca2abcb7b77a5f53dfc0c919fc4f9b1ac3f8",
+  "fixture_sha256": "f1b43581a5f1ae181f6c0c9e8901427af22569f9e93dadd4fcaa8fd007ba62bf",
+  "scorer_sha256": "cfa05e4cae1a7cbea37562975db71bbb3610805809929f394704fefea476984e",
+  "trace_adapter_sha256": "1cdada98d7727c7a908b0931528c87d6be1d63f95feb64ffdb6b4f76f7893d6b",
+  "runner_sha256": "f8f11d717cadf802e85888e7f75bb2b286e6f40c03b77965ef0997468646472b",
+  "hook_snap_sha256": "8c21acd6561c1cdb7dcc5b6c5c83bf39ccef57f77a9a9c85fe8dddc8f5239fd4",
+  "capture_contract_sha256": "b966e60fa1427daadc9f295c61b92418c294e3da593d9f3032faf54ef068ac23",
+  "schema_contract_sha256": "b0782f125bfe85e233fe6c0902acc2e5b8ec480508fb27971ac933bed0668647",
+  "reviewer_contract_sha256": "9b41a03147600612dc450d03076e5bbc80b6ad7b11396a5524ffd64d4c705e4c",
+  "capability_evidence_sha256": "b7d6dfd1a14d030d4cef871dab89fb3a7ae7ee21832fffbeca341552a47a922c",
+  "host_id": "UNVERIFIED",
+  "cli_version": "UNVERIFIED",
+  "tool_permissions": "UNVERIFIED",
+  "trace_extractor": "host-transcript-v1",
+  "limits": {"seconds_per_run": 900, "max_rework": 3},
+  "required_capabilities": ["fresh_worker", "exact_model_pin", "isolated_fixture", "trace_export", "bash_same_call_pre_post"],
+  "cost_ceiling_usd": 0,
+  "cost_authorized": false
+}

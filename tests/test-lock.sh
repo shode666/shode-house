@@ -69,6 +69,22 @@ lock_release "$lockd" "$token"
 [ -d "$lockd" ] && t_fail "release with the correct token must remove the lockdir" || t_ok
 rm -rf "$D"
 
+# A sandbox or restricted host may deny `ps`. The diagnostic owner pid must then
+# remain tied to the long-lived caller shell, never the short-lived command-
+# substitution process that returns the token.
+t_start "regression: ps unavailable while acquiring still records a LIVE owner, so recover refuses the held lock"
+D=$(sandbox); lockd="$D/.lock-ps-unavailable"
+ps() { return 127; }
+token=$(lock_acquire "$lockd"); acquire_rc=$?
+unset -f ps
+assert_true "$acquire_rc" "acquire must still succeed when ps is unavailable"
+out=$(bash "$LOCKLIB" recover "$lockd" --reason "test: ps unavailable fallback" 2>&1); rc=$?
+assert_eq "$rc" "3" "recover must classify the fallback owner as LOCK_LIVE"
+assert_contains "$out" "LOCK_LIVE" "recover output must say LOCK_LIVE"
+assert_eq "$(cat "$lockd/token" 2>/dev/null)" "$token" "recover must leave the held lock untouched"
+lock_release "$lockd" "$token"
+rm -rf "$D"
+
 # =============================================================================
 # (1) lock -> exactly 1 holder -- this IS the "acquire || acquire" race, proven both
 # deterministically (mutual exclusion is structural: mkdir is atomic, there is no

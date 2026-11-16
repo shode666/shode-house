@@ -10,7 +10,7 @@
 - Chris W1 follow-up C-7 / Sentinel F6: the fallback installs from the same hash-pinned file, and its temp dir
   is removed in every case, also when pip fails.
 - W9 wiring (bd v7u.4.7; shode-house-nl7): gate #27 also runs the historical 4.0/4.0.1 freeze checks,
-  the active 4.0.2 battery freeze check, and the eval/v4-security + eval/shadow-floor pytest suites,
+  the active 4.0.2 battery freeze check, and the v4-security, shadow-floor and maintenance-change pytest suites,
   required in every mode; a missing script or suite is red and each battery revision has its own label.
 Run: python3 tests/test_gate27_wiring.py   (CI gate #27 runs it; stdlib + bash)
 """
@@ -209,7 +209,7 @@ class A15WiringTest(unittest.TestCase):
 
 
 class W9WiringTest(unittest.TestCase):
-    """W9 wiring: historical + active freezes and the two eval suites run in #27 in every mode."""
+    """W9 wiring: historical + active freezes and the three eval suites run in #27 in every mode."""
 
     def stub_tree(self, root, freeze_rc=0, suite_ok=True):
         (root / "tests").mkdir()
@@ -226,11 +226,12 @@ class W9WiringTest(unittest.TestCase):
         freeze4 = root / "eval/scenarios/battery-4.0.2/check-freeze.sh"    # active protocol, separately identified
         freeze4.parent.mkdir(parents=True)
         freeze4.write_text('echo "battery-4.0.2 freeze stub"; exit 0\n')
-        for d in ("eval/v4-security/tests", "eval/shadow-floor/tests"):
+        for d in ("eval/v4-security/tests", "eval/shadow-floor/tests", "eval/maintenance-change/tests"):
             (root / d).mkdir(parents=True)
         (root / "eval/v4-security/tests/test_w9_stub_a.py").write_text("def test_a():\n    assert True\n")
         (root / "eval/shadow-floor/tests/test_w9_stub_b.py").write_text(
             "def test_b():\n    assert %s\n" % ("True" if suite_ok else "False"))
+        (root / "eval/maintenance-change/tests/test_w9_stub_c.py").write_text("def test_c():\n    assert True\n")
 
     def test_missing_w9_parts_are_red(self):
         """Sentinel W10a FU-4: each missing part is its own `X` (err) line -- fail=1 alone could come from another
@@ -243,7 +244,8 @@ class W9WiringTest(unittest.TestCase):
                        "W9 battery-4.0.1 freeze: eval/scenarios/battery-4.0.1/check-freeze.sh missing -- NOT CHECKED",
                        "W9 battery-4.0.2 freeze: eval/scenarios/battery-4.0.2/check-freeze.sh missing -- NOT CHECKED",
                        "W9 eval suite: eval/v4-security/tests missing -- NOT CHECKED",
-                       "W9 eval suite: eval/shadow-floor/tests missing -- NOT CHECKED"):
+                       "W9 eval suite: eval/shadow-floor/tests missing -- NOT CHECKED",
+                       "W9 eval suite: eval/maintenance-change/tests missing -- NOT CHECKED"):
             with self.subTest(needle=needle):
                 self.assertRegex(out, r"(?m)^  X " + re.escape(needle), out)
 
@@ -251,7 +253,8 @@ class W9WiringTest(unittest.TestCase):
         """FU-4: one part missing, the other two present and green -> still red, from that part's own err line."""
         for missing in ("eval/scenarios/core-4.0/check-freeze.sh", "eval/scenarios/core-4.0.1/check-freeze.sh",
                         "eval/scenarios/battery-4.0.1/check-freeze.sh",
-                        "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
+                        "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests",
+                        "eval/maintenance-change/tests"):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory() as tmp:
                 root = pathlib.Path(tmp)
                 env = this_python_env(root)
@@ -297,7 +300,7 @@ class W9WiringTest(unittest.TestCase):
                     self.assertIn("ok W9 core-4.0.1 freeze stub", out)
                     self.assertIn("ok W9 battery-4.0.1 freeze stub", out)
                     self.assertIn("ok W9 battery-4.0.2 freeze stub", out)
-                    self.assertRegex(out, r"ok W9 eval suites \(2 passed")
+                    self.assertRegex(out, r"ok W9 eval suites \(3 passed")
                 else:
                     self.assertIn("fail=1", out, out)
                     self.assertIn(want, out)
@@ -306,7 +309,8 @@ class W9WiringTest(unittest.TestCase):
         w9 = w9_block()
         for path in ("eval/scenarios/core-4.0/check-freeze.sh", "eval/scenarios/core-4.0.1/check-freeze.sh",
                      "eval/scenarios/battery-4.0.1/check-freeze.sh",
-                     "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests"):
+                     "eval/scenarios/battery-4.0.2/check-freeze.sh", "eval/v4-security/tests", "eval/shadow-floor/tests",
+                     "eval/maintenance-change/tests"):
             self.assertIn(path, w9)
             self.assertTrue((ROOT / path).exists(), path)
 

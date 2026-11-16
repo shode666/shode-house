@@ -17,6 +17,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 - Playwright selector guidance now follows user-facing semantics first: accessible role/name or label, then visible text, an explicit `data-testid` contract when semantics cannot identify the element, and CSS/XPath structure only as a last resort.
 - Critical UX flows now record the user's goal, start state, primary and edge/error/loading actions, visible outcome or recovery path, Playwright trace/screenshot plus console/network findings, and applicable axe/manual accessibility evidence.
 - Design guidance now treats kerning, line length, optical alignment, tabular figures, progressive disclosure, interruptible animation and useful state feedback as contextual design decisions rather than fixed numeric recipes.
+- The README's M4 summary now matches the canonical feedback classifier: defects reopen only the affected claim, scope changes revise acceptance, and questions or status checks do not invent a failure.
+
+### Experimental evaluation
+
+- Added an opt-in maintenance/change-task protocol and executable structured-verdict scorer designed to compare five fresh Sonnet current-release runs with five matched 4.0.0 baseline runs. It keeps Claude and Codex qualification separate and treats incomplete or conflicting reviewer verdicts as unscorable rather than passing. **Behavioral qualification: NOT RUN.** This experiment is not part of `eval/run-core.sh` and has no release threshold until a run is preregistered and completed without post-result fixture changes.
 
 ### Provenance and scope
 

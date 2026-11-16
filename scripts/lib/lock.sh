@@ -785,7 +785,11 @@ lock_acquire() {
   # liveness-gated REFUSAL in lock_recover less accurate, never break mutual
   # exclusion (mkdir already is that) and never enable a reclamation.
   local ownerpid; ownerpid=$(ps -o ppid= -p "$mypid" 2>/dev/null | tr -d '[:space:]')
-  case "$ownerpid" in ''|*[!0-9]*) ownerpid="$mypid" ;; esac
+  # Restricted hosts may deny `ps`. In that case $$ is the long-lived caller shell,
+  # while $mypid is this command-substitution process and dies as soon as the token
+  # is returned. Falling back to $$ can only keep recovery conservative for longer;
+  # falling back to $mypid can misclassify a held lock as DEAD and reclaim it.
+  case "$ownerpid" in ''|*[!0-9]*) ownerpid="$$" ;; esac
   local token; token="${mypid}.$(date +%s).${RANDOM}.${RANDOM}"
   printf '%s' "$token" > "$lockd/token"
   printf '%s' "$ownerpid" > "$lockd/pid"

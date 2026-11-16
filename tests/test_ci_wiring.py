@@ -33,6 +33,13 @@ REQ = ROOT / ".github/requirements-ci.txt"
 GATE_PATH = "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
 
 
+class MaintenanceEvalWiringTest(unittest.TestCase):
+    def test_maintenance_change_tests_are_in_make_validate_gate(self):
+        text = CI.read_text()
+        self.assertIn("eval/maintenance-change/tests", text)
+        self.assertRegex(text, r"for d in[^\n]*eval/maintenance-change/tests")
+
+
 def gate_has(*tools):
     return all(shutil.which(tool, path=GATE_PATH) for tool in tools)
 

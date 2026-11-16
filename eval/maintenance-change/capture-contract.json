@@ -1,0 +1,6 @@
+{
+  "schema": "maintenance-change-capture-v1",
+  "pre_tool_use": ["Task", "Agent", "Bash"],
+  "post_tool_use": ["Task", "Agent", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"],
+  "same_call_state_tools": ["Task", "Agent", "Bash"]
+}

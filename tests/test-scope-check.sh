@@ -45,6 +45,26 @@ assert_eq() {
 assert_contains() {
   case "$1" in *"$2"*) t_ok ;; *) t_fail "$3 -- '$1' does not contain '$2'" ;; esac
 }
+assert_not_contains() {
+  case "$1" in *"$2"*) t_fail "$3 -- '$1' unexpectedly contains '$2'" ;; *) t_ok ;; esac
+}
+declare -F assert_not_contains >/dev/null 2>&1 || {
+  printf 'test harness error: assert_not_contains is not defined\n' >&2
+  exit 1
+}
+# Prove the negative assertion has teeth without changing this suite's counters: the
+# first call must pass and the second must take the isolated failure path.
+(
+  t_ok() { :; }
+  t_fail() { exit 7; }
+  assert_not_contains "safe output" "secret" "positive control"
+  assert_not_contains "contains secret" "secret" "negative control"
+  exit 9
+)
+[ "$?" -eq 7 ] || {
+  printf 'test harness error: assert_not_contains negative control did not fail\n' >&2
+  exit 1
+}
 assert_true()  { if [ "$1" -eq 0 ]; then t_ok; else t_fail "$2 -- exit code $1"; fi; }
 assert_false() { if [ "$1" -ne 0 ]; then t_ok; else t_fail "$2 -- expected non-zero exit"; fi; }
 assert_rc()    { if [ "$1" -eq "$2" ]; then t_ok; else t_fail "$3 -- exit code $1, want $2"; fi; }

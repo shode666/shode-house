@@ -1,0 +1,10 @@
+{
+  "id": "maintenance-label-invariant",
+  "stages": ["explain_existing_invariant", "implement_small_requirement_change"],
+  "task": "task.md",
+  "fixture": "fixture",
+  "public_check": "fixture/public_test.py",
+  "held_back_check": "fixture/held_back_test.py",
+  "network": false,
+  "external_side_effects": false
+}

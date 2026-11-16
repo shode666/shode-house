@@ -487,7 +487,7 @@ router ▸ Ops   : deploy
 | M1 | **Ingress Guard** | ทุก agent ก่อน respond: bd show → state → classify → route check |
 | M2 | **Follow-up Classifier** | router auto-triage user message (fix/spec/quest/approve/new/status) |
 | M3 | **Anti-Puppet "Done"** | `build`/`verify`/`secure`/`design` ห้าม claim "done"; only router after multi-sig |
-| M4 | **User Comment = FAIL** | feedback ใด ๆ = reopen bd + iter++ |
+| M4 | **Defect invalidates affected claim** | defect = reopen affected criterion/phase + iter++; scope change → revise acceptance; question/status → answer from evidence |
 | M5 | **Spec Change = bd revision** | verbal change ห้าม fix ตรง → `plan` (requirements mode) revision → Phase 1a redo |
 | M6 | **SESSION-STATE.md** | router maintain persistent state; ทุก agent read first |
 | M7 | **Direct-to-Agent block** | agents other than the router ห้าม accept direct-from-user → route router |

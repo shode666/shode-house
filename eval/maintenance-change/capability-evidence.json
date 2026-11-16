@@ -1,0 +1,12 @@
+{
+  "host_id": "UNVERIFIED",
+  "cli_version": "UNVERIFIED",
+  "tool_permissions": "UNVERIFIED",
+  "capabilities": {
+    "fresh_worker": false,
+    "exact_model_pin": false,
+    "isolated_fixture": false,
+    "trace_export": false,
+    "bash_same_call_pre_post": false
+  }
+}
