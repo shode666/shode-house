@@ -250,8 +250,17 @@ class TeamEntryTest(unittest.TestCase):
             "- **Production hot-fix P0/P1** — ใช้ `incident` skill ก่อน; dev-gate ตามมาตอน follow-up fix":
                 "- **Production hot-fix P0/P1** — ใช้ `shode-house:incident` skill ก่อน; dev-gate ตามมาตอน follow-up fix",
         }
+        # 4.2.0: these five migrated rows are now covered by the ordered ladder contract below.
+        ladder_migrations = {
+            "| 2 | stdlib ทำได้ไหม? | ใช้ stdlib |",
+            "| 3 | native platform feature? (`<input type=date>`, `crypto`, ...) | ใช้ native |",
+            "| 4 | dep ที่ลงแล้วทำได้? | ใช้ของเดิม ห้ามลง dep ใหม่ |",
+            "| 5 | one-liner พอไหม? | เขียนบรรทัดเดียว |",
+            '| 6 | ถ้าผ่านทั้งหมด | เขียน "ขั้นต่ำที่ work" เท่านั้น |',
+        }
         missing = [l for l in self._baseline_body_lines(d + "/SKILL.md")
-                   if self._neutral(l) not in lines and l not in dropped and (v4_names(p5[l]) if l in p5 else None) not in lines]
+                   if self._neutral(l) not in lines and l not in dropped and l not in ladder_migrations
+                   and (v4_names(p5[l]) if l in p5 else None) not in lines]
         self.assertEqual([], missing)
         self.assertIn('### Hand-off evidence (Phase 2 → 3) — ขาดข้อใด = ยังไม่ done, ห้าม claim "done"', lines)
         self.assertIn("### Stop and return", lines)
@@ -260,6 +269,19 @@ class TeamEntryTest(unittest.TestCase):
             self.assertIn("[%s](%s)" % (ref, ref), core)
         self.assertIn("`shortcut(bd:N):` comment", core)
         self.assertIn("**Quality gate ผ่านครบ 11** (Gate 0-10, ดู Part 2): architecture · format", core)
+
+    def test_dev_gate_prefers_reuse_before_minimal_readable_code(self):
+        core = (ROOT / "skills/workflow/dev-gate/SKILL.md").read_text()
+        ladder = core.split("### 0.", 1)[1].split("### 1.", 1)[0]
+        rows = re.findall(r"^\| (\d+) \| .*? \| (.*?) \|$", ladder, re.M)
+        self.assertEqual(["1", "2", "3", "4", "5", "6"], [number for number, _ in rows])
+        for (_, result), required in zip(rows, (
+            "skip (YAGNI)", "ใช้ของใน repo ก่อน", "ใช้ stdlib", "ใช้ native",
+            "ใช้ของเดิม ห้ามลง dep ใหม่", "เขียนให้น้อยที่สุดเท่าที่ทำงานได้ครบและอ่านรู้เรื่อง",
+        )):
+            self.assertIn(required, result)
+        self.assertIn("ไม่ย่อเพื่อให้เหลือบรรทัดเดียว", rows[-1][1])
+        self.assertIn("validation/security/a11y/regulation ห้ามตัด", ladder)
 
     def test_ui_test_router_keeps_every_baseline_line(self):
         d = "skills/ui/ui-test"

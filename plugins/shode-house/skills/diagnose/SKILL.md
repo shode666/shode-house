@@ -98,12 +98,12 @@ promote to Full and load this reference if the first fix fails or another sympto
 
 ### 5. Cleanup + Prevent (บังคับก่อนบอกว่าเสร็จ)
 
-- [ ] repro เดิมไม่ repro แล้ว (รัน loop จาก Step 1 ซ้ำ + paste output)
+- [ ] Re-run the Step 1 loop; show output proving the original bug is gone.
 - [ ] ship fix พร้อม regression test ที่ผ่าน (หรือบันทึกไว้ว่าไม่มี seam ที่ถูกต้อง)
-- [ ] instrumentation `[DEBUG-...]` ถูกลบครบ (`grep` prefix ยืนยัน + paste ว่าไม่เจอ)
-- [ ] throwaway harness/prototype ถูกลบ หรือย้ายไปที่ที่ mark ชัดว่าเป็นของ debug
-- [ ] **เขียน hypothesis ที่ถูกลงใน commit / PR message** — คนที่ debug คนต่อไปจะได้เรียนรู้
-- [ ] pattern เดียวกันอาจมีที่อื่น → `grep` แล้วแก้ให้หมด
+- [ ] Remove `[DEBUG-...]` instrumentation; show `grep` finds no prefix.
+- [ ] Delete throwaway harness/prototype or move it to a marked debug location.
+- [ ] Put the confirmed hypothesis in the commit or PR message.
+- [ ] Search broadly with `grep`; fix only confirmed instances of this cause in authorized scope. Report other findings separately; no unrelated edits or refactors.
 - [ ] doc ที่ทำให้เข้าใจผิด → แก้
 - [ ] production incident → postmortem แบบ blameless: โทษระบบ ไม่โทษคน (`incident` skill)
 

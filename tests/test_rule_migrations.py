@@ -55,7 +55,7 @@ class MigrationTest(unittest.TestCase):
                 migrations.load(ROOT)
 
     def test_current_migrations_validate(self):
-        self.assertEqual(354, len(migrations.load(ROOT)))  # +2 v4.2 contextual motion guidance; +2 first-class Codex adapter; v4.0.1 agent consolidation 18 -> 6 (shode-house-jni): 350 entries before these changes
+        self.assertEqual(364, len(migrations.load(ROOT)))  # +10 v4.2 repository reuse and scoped diagnosis; 354 before
 
     def test_each_replacement_anchor_is_required(self):
         for item in self.data["migrations"]:
@@ -64,6 +64,10 @@ class MigrationTest(unittest.TestCase):
                 # everywhere so whitespace normalization cannot conceal removal.
                 with self.subTest(anchor=anchor):
                     self.check_mutation(missing_text=anchor.split()[0])
+
+    def test_diagnose_rejects_broad_repairs(self):
+        # A search hit with a different cause or outside task scope is not a fix target.
+        self.check_mutation(missing_text="fix only confirmed instances of this cause in authorized scope")
 
     def test_duplicates_fail(self):
         self.data["migrations"].append(copy.deepcopy(self.data["migrations"][0]))

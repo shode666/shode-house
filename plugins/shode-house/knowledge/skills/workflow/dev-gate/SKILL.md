@@ -93,11 +93,11 @@ configured production checks with `--no-verify`.
 | ขั้น | ถาม | ถ้าใช่ |
 |---|---|---|
 | 1 | feature นี้ต้องมีจริงไหม? | ไม่ → skip (YAGNI) + log เป็น discovered task |
-| 2 | stdlib ทำได้ไหม? | ใช้ stdlib |
-| 3 | native platform feature? (`<input type=date>`, `crypto`, ...) | ใช้ native |
-| 4 | dep ที่ลงแล้วทำได้? | ใช้ของเดิม ห้ามลง dep ใหม่ |
-| 5 | one-liner พอไหม? | เขียนบรรทัดเดียว |
-| 6 | ถ้าผ่านทั้งหมด | เขียน "ขั้นต่ำที่ work" เท่านั้น |
+| 2 | มี implementation ที่เหมาะและใช้ซ้ำได้ใน repo ไหม? | ใช้ของใน repo ก่อน |
+| 3 | stdlib ทำได้ไหม? | ใช้ stdlib |
+| 4 | native platform feature? (`<input type=date>`, `crypto`, ...) | ใช้ native |
+| 5 | dep ที่ลงแล้วทำได้? | ใช้ของเดิม ห้ามลง dep ใหม่ |
+| 6 | ถ้าไม่มีของเดิมที่เหมาะ | เขียนให้น้อยที่สุดเท่าที่ทำงานได้ครบและอ่านรู้เรื่อง ไม่ย่อเพื่อให้เหลือบรรทัดเดียว |
 
 > ทุกครั้งที่ตัด (ขั้น 1) หรือใช้ทางลัด → mark ด้วย `shortcut(bd:N):` comment (format → `quality-gates.md` Gate 3) เพื่อให้ debt harvest เก็บได้
 > เพดานความขี้เกียจ = carve-out ด้านบน (validation/security/a11y/regulation ห้ามตัด)
