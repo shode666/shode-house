@@ -109,6 +109,43 @@ assert_eq "$(cat "$counter")" "$N" "a non-atomic increment must survive $N concu
 rm -rf "$D"
 
 # =============================================================================
+# (1b) a mkdir that reports success after EEXIST (seen on Ubuntu 26.04) must not hand
+# out a second holder: ownership is the O_EXCL token create, not mkdir's exit status.
+# =============================================================================
+t_start "CONTRACT 1b: mkdir that returns 0 on EEXIST -- a second acquire must not succeed while the lock is held"
+D=$(sandbox); lockd="$D/.lock-lying-mkdir"
+mkdir() { command mkdir "$@" 2>/dev/null; return 0; }
+tok1=$(lock_acquire "$lockd"); rc1=$?
+assert_eq "$rc1" "0" "first acquire must succeed"
+out=$(lock_acquire "$lockd" 2>/dev/null); rc2=$?
+assert_eq "$rc2" "1" "second acquire must time out LOCK_BUSY (rc=1) even though mkdir reported success"
+assert_eq "$out" "" "the losing acquire must not print a token"
+assert_eq "$(cat "$lockd/token")" "$tok1" "the holder's token must be untouched"
+lock_release "$lockd" "$tok1"
+[ -d "$lockd" ] && t_fail "release with the holder's token must remove the lock" || t_ok
+unset -f mkdir
+rm -rf "$D"
+
+t_start "CONTRACT 1b / RACE: mkdir that returns 0 on EEXIST -- N=15 concurrent workers still serialize exactly"
+D=$(sandbox); lockd="$D/.lock-lying-race"; counter="$D/counter"; printf '0' > "$counter"
+mkdir() { command mkdir "$@" 2>/dev/null; return 0; }
+N=15
+for _ in $(seq 1 "$N"); do
+  (
+    tok=$(lock_acquire "$lockd") || exit 1
+    val=$(cat "$counter")
+    sleep 0.02
+    printf '%s' "$((val + 1))" > "$counter"
+    lock_release "$lockd" "$tok"
+  ) &
+done
+wait
+unset -f mkdir
+assert_eq "$(cat "$counter")" "$N" "a lying mkdir must not let two holders overlap (any overlap would under-count)"
+[ -d "$lockd" ] && t_fail "the lockdir must not remain held after every worker released" || t_ok
+rm -rf "$D"
+
+# =============================================================================
 # (2) a non-holder cannot release
 # =============================================================================
 t_start "CONTRACT 2: a non-holder cannot release -- wrong token is a silent no-op, empty token is a silent no-op, only the exact matching token clears the lock"

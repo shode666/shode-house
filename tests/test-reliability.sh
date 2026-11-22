@@ -703,11 +703,13 @@ rm -rf "$D"
 # =============================================================================
 
 t_start "CONCURRENCY: N=20 parallel reserve calls, 20 DISTINCT keys, same bd -- ALL 20 must persist in the ledger (no lost writes)"
-D=$(sandbox); mkdir -p "$D/.shode-house"; export SIDEEFFECT_ROOT="$D"
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/tmp-out"; export SIDEEFFECT_ROOT="$D"
 for i in $(seq 1 20); do
-  "$SE" reserve bd-conc-distinct deploy "KEY-$i" "concurrent" >/dev/null 2>&1 &
+  ( "$SE" reserve bd-conc-distinct deploy "KEY-$i" "concurrent" >"$D/tmp-out/out-$i" 2>&1; echo $? > "$D/tmp-out/rc-$i" ) &
 done
 wait
+worker_failures=$(awk '$1 != 0 { n++ } END { print n+0 }' "$D"/tmp-out/rc-*)
+assert_eq "$worker_failures" "0" "all 20 reserve workers must succeed before ledger cardinality is used as lost-write evidence; worker output/rc distinguish lock timeout from overwrite"
 lf="$D/.shode-house/side-effects/bd-conc-distinct.json"
 n=$(jq 'keys | length' "$lf" 2>/dev/null)
 assert_eq "$n" "20" "all 20 concurrently-reserved DISTINCT keys must be present in the ledger after the lock fix (was 1/20 before)"
@@ -723,10 +725,15 @@ winners=$(grep -l '^RESERVED: ' "$D"/tmp-out/out-* 2>/dev/null | wc -l | tr -d '
 reconciled=$(grep -l 'RECONCILE_REQUIRED' "$D"/tmp-out/out-* 2>/dev/null | wc -l | tr -d ' ')
 rc0=$(cat "$D"/tmp-out/rc-* | grep -c '^0$')
 rc2=$(cat "$D"/tmp-out/rc-* | grep -c '^2$')
+rc1=$(awk '$1 == 1 { n++ } END { print n+0 }' "$D"/tmp-out/rc-*)
+rc4=$(awk '$1 == 4 { n++ } END { print n+0 }' "$D"/tmp-out/rc-*)
+rc5=$(awk '$1 == 5 { n++ } END { print n+0 }' "$D"/tmp-out/rc-*)
+rc_other=$(awk '$1 != 0 && $1 != 1 && $1 != 2 && $1 != 4 && $1 != 5 { n++ } END { print n+0 }' "$D"/tmp-out/rc-*)
+failure_sample=$(for f in "$D"/tmp-out/rc-*; do frc=$(cat "$f"); if [ "$frc" != 0 ] && [ "$frc" != 2 ]; then o="$D/tmp-out/out-${f##*-}"; printf 'worker=%s rc=%s output=%s' "${f##*-}" "$frc" "$(tr '\n' ' ' < "$o" | cut -c1-240)"; break; fi; done)
 assert_eq "$winners" "1" "exactly one caller must be told to proceed (RESERVED) -- got $winners"
 assert_eq "$reconciled" "19" "the other 19 must all get the reconcile verdict (RECONCILE_REQUIRED), never a RESERVED success -- got $reconciled"
 assert_eq "$rc0" "1" "exactly one caller must exit 0 -- got $rc0"
-assert_eq "$rc2" "19" "the other 19 callers must all exit 2 (non-zero, never RESERVED-flavored success) -- got $rc2"
+assert_eq "$rc2" "19" "the other 19 callers must all exit 2 (non-zero, never RESERVED-flavored success) -- got $rc2; rc1=$rc1 rc4=$rc4 rc5=$rc5 other=$rc_other sample=[$failure_sample]"
 for f in "$D"/tmp-out/out-*; do
   case "$(cat "$f")" in
     *"perform the effect now"*"RECONCILE"*) t_fail "a single output must never contain BOTH 'perform the effect now' and RECONCILE_REQUIRED -- $f" ;;
@@ -788,17 +795,23 @@ assert_eq "$rc3" "1" "check after reconcile must be exit 1 ALREADY_DONE"
 rm -rf "$D"
 
 t_start "CONCURRENCY: record(completed) racing reserve() on the SAME already-reserved key, 30 trials -- completed must NEVER be silently reverted back to pending (was 15/30 before the lock fix)"
-D=$(sandbox); mkdir -p "$D/.shode-house"; export SIDEEFFECT_ROOT="$D"
-lost=0
+D=$(sandbox); mkdir -p "$D/.shode-house" "$D/tmp-out"; export SIDEEFFECT_ROOT="$D"
+lost=0; record_failures=0; reserve_bad_rc=0
 for t in $(seq 1 30); do
   k="KEY-LU-$t"
   "$SE" reserve bd-conc-lu deploy "$k" "initial" >/dev/null 2>&1
-  ( "$SE" record bd-conc-lu deploy "$k" completed "finalized" >/dev/null 2>&1 ) &
-  ( "$SE" reserve bd-conc-lu deploy "$k" "racing-reserve" >/dev/null 2>&1 ) &
+  ( "$SE" record bd-conc-lu deploy "$k" completed "finalized" >"$D/tmp-out/record-$t.out" 2>&1; echo $? > "$D/tmp-out/record-$t.rc" ) &
+  ( "$SE" reserve bd-conc-lu deploy "$k" "racing-reserve" >"$D/tmp-out/reserve-$t.out" 2>&1; echo $? > "$D/tmp-out/reserve-$t.rc" ) &
   wait
+  rrc=$(cat "$D/tmp-out/record-$t.rc")
+  src=$(cat "$D/tmp-out/reserve-$t.rc")
+  [ "$rrc" -ne 0 ] && record_failures=$((record_failures + 1))
+  case "$src" in 1|2) ;; *) reserve_bad_rc=$((reserve_bad_rc + 1)) ;; esac
   st=$(jq -r --arg k "$k" '.[$k].status' "$D/.shode-house/side-effects/bd-conc-lu.json")
   [ "$st" != "completed" ] && lost=$((lost + 1))
 done
+assert_eq "$record_failures" "0" "all 30 record(completed) workers must succeed; a pending final state after record failed to acquire is not a successful write being overwritten"
+assert_eq "$reserve_bad_rc" "0" "each racing reserve must observe either completed (rc=1) or pending/reconcile (rc=2), never succeed or fail outside the state-machine contract"
 assert_eq "$lost" "0" "0 of 30 trials should lose the completed write to a racing reserve after the lock fix"
 rm -rf "$D"
 

@@ -5,7 +5,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [Unreleased]
 
-## [4.2.0] — 2026-11-15
+## [4.2.0] — 2026-11-22
 
 ### Added
 
@@ -21,6 +21,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 - Diagnosis still searches for related instances but only fixes confirmed affected instances within the authorized task scope. Report other findings separately instead of expanding the patch.
 - The README's M4 summary now matches the canonical feedback classifier: defects reopen only the affected claim, scope changes revise acceptance, and questions or status checks do not invent a failure.
 
+### Fixed
+
+- `scripts/lib/lock.sh` no longer treats `mkdir`'s exit status as proof of ownership. Some `mkdir` implementations (seen on Ubuntu 26.04) return 0 after EEXIST, so two contenders could both enter the critical section; the holder is now the one process that wins the exclusive (noclobber, O_EXCL) create of the lock's `token` file. Lock format, release and recovery are unchanged. `tests/test-lock.sh` adds CONTRACT 1b (a `mkdir` that always reports success: a second acquire is LOCK_BUSY, 15 concurrent workers still serialize exactly), and the `tests/test-reliability.sh` concurrency cases record each worker's exit code and output so a lock timeout is not mistaken for a lost write.
+
 ### Experimental evaluation
 
 - Added an opt-in maintenance/change-task protocol and executable structured-verdict scorer designed to compare five fresh Sonnet current-release runs with five matched 4.0.0 baseline runs. It keeps Claude and Codex qualification separate and treats incomplete or conflicting reviewer verdicts as unscorable rather than passing. **Behavioral qualification: NOT RUN.** This experiment is not part of `eval/run-core.sh` and has no release threshold until a run is preregistered and completed without post-result fixture changes.
@@ -28,6 +32,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 ### Provenance and scope
 
 - Reviewed primary material from UI/UX Pro Max, Impeccable, Superpowers, Vercel AI SDK, Supabase Agent Skills and Playwright. No external plugin, skill, dependency or detector was installed or executed; shode-house remains the workflow and gate owner. The existing attributed MIT UI/UX Pro Max subset remains proposal data, and no Apache-2.0 Impeccable code was copied.
+- The repository-reuse step of the YAGNI ladder and scope-bounded diagnosis repair adopt ideas reviewed from Karpathy-inspired coding guidelines ([forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills), Simplicity First and Surgical Changes), [Ponytail](https://github.com/DietrichGebert/ponytail), [mattpocock/skills](https://github.com/mattpocock/skills) and [Everything Claude Code](https://github.com/affaan-m/everything-claude-code). Rules were rewritten in shode-house's own contracts for both Claude Code and Codex; no external plugin was installed and no code was copied.
 
 ### Validation status
 

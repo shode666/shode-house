@@ -727,6 +727,11 @@ _lock_classify_timeout() {
 lock_acquire() {
   local lockd="$1" waited=0
   local recovering="${lockd}.recovering"
+  # BASHPID (not $$) -- callers may invoke this from inside a background subshell; $$
+  # stays pinned to the top-level shell even inside one, which would make every
+  # concurrent subshell mint the "same" token.
+  local mypid="${BASHPID:-$$}"
+  local token; token="${mypid}.$(date +%s).${RANDOM}.${RANDOM}"
 
   while :; do
     # PRE-CHECK: an in-flight recovery blocks new acquires outright -- do not even
@@ -755,7 +760,10 @@ lock_acquire() {
       continue
     fi
 
-    if mkdir "$lockd" 2>/dev/null; then
+    # Ownership = winning the O_EXCL (noclobber) create of $lockd/token, not mkdir's exit
+    # status alone: some mkdir implementations (seen on Ubuntu 26.04) report success after
+    # EEXIST, so two contenders can both "win" mkdir. Only one can create the token file.
+    if mkdir "$lockd" 2>/dev/null && ( set -C; printf '%s' "$token" > "$lockd/token" ) 2>/dev/null; then
       break
     fi
     waited=$((waited + 1))
@@ -771,10 +779,7 @@ lock_acquire() {
     sleep 0.1
   done
 
-  # mkdir succeeded -- write metadata. BASHPID (not $$) -- callers may invoke this
-  # from inside a background subshell; $$ stays pinned to the top-level shell even
-  # inside one, which would make every concurrent subshell mint the "same" token.
-  local mypid="${BASHPID:-$$}"
+  # token claimed -- write the remaining metadata.
   # Record the REAL long-lived caller's pid, not this subshell's own -- every real
   # caller invokes via `tok=$(lock_acquire ...)`, which forks a subshell that exits
   # within microseconds of returning; `kill -0 $mypid` would report "not running"
@@ -790,8 +795,6 @@ lock_acquire() {
   # is returned. Falling back to $$ can only keep recovery conservative for longer;
   # falling back to $mypid can misclassify a held lock as DEAD and reclaim it.
   case "$ownerpid" in ''|*[!0-9]*) ownerpid="$$" ;; esac
-  local token; token="${mypid}.$(date +%s).${RANDOM}.${RANDOM}"
-  printf '%s' "$token" > "$lockd/token"
   printf '%s' "$ownerpid" > "$lockd/pid"
   date +%s > "$lockd/ts"
 
