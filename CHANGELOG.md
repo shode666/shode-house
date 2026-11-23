@@ -23,7 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ### Fixed
 
-- `scripts/lib/lock.sh` no longer treats `mkdir`'s exit status as proof of ownership. Some `mkdir` implementations (seen on Ubuntu 26.04) return 0 after EEXIST, so two contenders could both enter the critical section; the holder is now the one process that wins the exclusive (noclobber, O_EXCL) create of the lock's `token` file. Lock format, release and recovery are unchanged. `tests/test-lock.sh` adds CONTRACT 1b (a `mkdir` that always reports success: a second acquire is LOCK_BUSY, 15 concurrent workers still serialize exactly), and the `tests/test-reliability.sh` concurrency cases record each worker's exit code and output so a lock timeout is not mistaken for a lost write.
+- `scripts/lib/lock.sh` no longer treats `mkdir`'s exit status as proof of ownership. Some `mkdir` implementations (seen on Ubuntu 26.04) return 0 after EEXIST, so two contenders could both enter the critical section; the holder is now the one process that wins the exclusive (noclobber, O_EXCL) create of the lock's `token` file. `lock_recover` applies the same rule to its `<lock>.recovering` claim (mkdir plus an exclusive create of the marker's `pid` file), so concurrent recovers on a stuck lock cannot both win. Lock format, release and other recovery semantics are unchanged. `tests/test-lock.sh` adds CONTRACT 1b (a `mkdir` that always reports success: a second acquire is LOCK_BUSY, 15 concurrent workers still serialize exactly, and 5 concurrent recovers yield exactly one RECOVERED), and the `tests/test-reliability.sh` concurrency cases record each worker's exit code and output so a lock timeout is not mistaken for a lost write.
 
 ### Experimental evaluation
 

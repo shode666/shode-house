@@ -520,6 +520,30 @@ for _trial in $(seq 1 8); do
 done
 assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS out of 5 concurrent recovers -- got $bad_trials bad trial(s)"
 
+# CONTRACT 1b for recover: a mkdir that reports success after EEXIST must not let two
+# recovers both claim `.recovering`. The recover CLI runs in child bash processes, so the
+# lying mkdir is a PATH shim (real mkdir, always exit 0) rather than a shell function.
+t_start "CONTRACT 1b / RACE recover||recover: mkdir that returns 0 on EEXIST -- N=5 concurrent recovers on the SAME stuck lock, exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS, 8 trials"
+SHIM=$(sandbox)
+REAL_MKDIR=$(command -v mkdir)
+printf '#!/bin/sh\n%s "$@" 2>/dev/null\nexit 0\n' "$REAL_MKDIR" > "$SHIM/mkdir"
+chmod +x "$SHIM/mkdir"
+bad_trials=0
+for _trial in $(seq 1 8); do
+  D=$(sandbox); lockd="$D/.lock-rr-lying"
+  seed_dead_lock "$lockd" "stale" >/dev/null
+  for i in 1 2 3 4 5; do
+    PATH="$SHIM:$PATH" bash "$LOCKLIB" recover "$lockd" --reason "lying-mkdir-recover-$i" >"$D/out.$i" 2>&1 &
+  done
+  wait
+  recovered=$(grep -l '^RECOVERED' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
+  in_progress=$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
+  [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || bad_trials=$((bad_trials + 1))
+  rm -rf "$D"
+done
+rm -rf "$SHIM"
+assert_eq "$bad_trials" "0" "a lying mkdir must still yield exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS per trial -- got $bad_trials bad trial(s)"
+
 # =============================================================================
 # bd:shode-house-8ss close-out -- the RACE recover||recover flake above, made
 # deterministic. `mkdir` is the only exclusive claim available for the .recovering

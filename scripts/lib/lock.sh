@@ -51,7 +51,8 @@
 # a timeout, or a health check -- only a human (or a script acting on a human's behalf)
 # invoking the `recover` CLI ever calls it.
 #
-# Recovery wins an atomic claim (`<lock>.recovering`, a fresh `mkdir` -- exactly one
+# Recovery wins an atomic claim (`<lock>.recovering`: a fresh `mkdir` plus an O_EXCL
+# create of its `pid` file, since some mkdir report success after EEXIST -- exactly one
 # winner) BEFORE it ever inspects or touches the canonical lock. `lock_acquire` PRE-
 # checks that marker before its own `mkdir`, and -- this is the part that actually
 # closes the race -- RE-CHECKS it (and re-checks its own token is still the one on
@@ -1023,7 +1024,13 @@ lock_recover() {
   local recovering="${lockd}.recovering"
 
   # ---- Step 0: atomically claim the RIGHT to recover -- exactly one winner. ----
-  if ! mkdir "$recovering" 2>/dev/null; then
+  # Ownership = mkdir AND winning the O_EXCL (noclobber) create of $recovering/pid, not
+  # mkdir's exit status alone: some mkdir implementations (seen on Ubuntu 26.04) report
+  # success after EEXIST, so two recovers can both "win" mkdir. Only one can create the
+  # pid file; the loser falls into the "marker already exists" branch below. The pid is
+  # the first file written anyway (see below), so the claim still carries the pid.
+  local my_pid="${BASHPID:-$$}"
+  if ! { mkdir "$recovering" 2>/dev/null && ( set -C; printf '%s' "$my_pid" > "$recovering/pid" ) 2>/dev/null; }; then
     local mcls; mcls=$(_lock_classify_holder "$recovering")
     # ---- bd:shode-house-8ss close-out: a marker that is merely PID-LESS (UNKNOWN) is
     # the one classification that cannot tell "another recovery claimed this marker
@@ -1120,8 +1127,7 @@ lock_recover() {
   # where a concurrent losing recover (or lock_acquire's marker-timeout classifier)
   # observes this marker as pid-less and has to settle-wait (see
   # _lock_classify_holder) instead of seeing LIVE immediately. ----
-  local my_pid="${BASHPID:-$$}"
-  printf '%s' "$my_pid" > "$recovering/pid"
+  # (the pid file itself was already written by the exclusive create in Step 0.)
   # LOCK_RECOVER_TOKEN_OVERRIDE: test-only hook (no-op unless set) so a test can force
   # a deterministic, predictable quarantine-name collision (Acceptance E) without
   # needing to guess an unguessable real token.
