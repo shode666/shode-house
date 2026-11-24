@@ -101,7 +101,7 @@ pin ขอบเขต diff **ก่อน** fan-out แล้วส่ง comma
 
 ## Step 1 — Invoke review-checklist skill
 
-> review checklist รวบศูนย์ใน `skills/discipline/review-checklist/SKILL.md` — โหลด `shode-house:review-checklist` ด้วย `Skill`. Command นี้ = scope + context-aware invoke; axis plan อยู่ที่ router style
+> review checklist รวบศูนย์ใน `skills/discipline/review-checklist/SKILL.md` — โหลด `shode-house:review-checklist` ด้วย `Skill`. Workflow นี้ = scope + context-aware invoke; axis plan อยู่ที่ router style
 
 Router style not active in this session → report `BLOCKED: team execution needs the router style (Claude Code)`; do not read the style file to act as the router.
 
@@ -110,7 +110,7 @@ one line per axis from `output-styles/shode-house.md` § Review card: standards,
 domain, ui; each DISPATCH or SKIP("<reason>"); spec is always DISPATCH. Missing Beads or a ceremonial
 printout is not a blocker; missing scope/required ownership is.
 
-กติกาที่ command นี้เพิ่มจาก card (บังคับทั้ง 4 ข้อ):
+กติกาที่ workflow นี้เพิ่มจาก card (บังคับทั้ง 4 ข้อ):
 1. An explicitly requested full review dispatches runtime too. Otherwise runtime is DISPATCH when the
    harness risk tier includes `verify` (runtime axis) (`skills/discipline/shode-house-workflow/harness.md`: every
    Standard feature), when the change crosses a process/network/storage boundary, or when project

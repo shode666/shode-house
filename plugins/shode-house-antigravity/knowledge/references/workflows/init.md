@@ -30,8 +30,8 @@ fi
 ตรวจว่า fresh หรือ brownfield ก่อน scaffold:
 
 ```bash
-# brownfield = มี git repo / manifest / source อยู่แล้ว
-{ [ -d .git ] || ls package.json pyproject.toml go.mod build.gradle* Cargo.toml pom.xml 2>/dev/null | grep -q . ; } && PROJECT="brownfield" || PROJECT="fresh"
+# brownfield = มี git repo (.git เป็น dir หรือ file ของ worktree) / manifest / source อยู่แล้ว
+{ [ -e .git ] || ls package.json pyproject.toml go.mod build.gradle* Cargo.toml pom.xml 2>/dev/null | grep -q . ; } && PROJECT="brownfield" || PROJECT="fresh"
 ```
 
 - **fresh** → scaffold เต็ม (Phase 2 / Mode B ตามปกติ)
@@ -280,6 +280,6 @@ Default: **Caddy** (auto HTTPS, simple)
 
 ## Skill composition
 
-- After `cook init` → `cook spec` (start first feature design) หรือ `/automate-test` (test pyramid setup)
+- After `cook init` → `cook spec` (start first feature design) หรือ skill `shode-house:automate-test` (test pyramid setup)
 - After `cook init` setup project → invoke `shode-house:automate-test` skill ทันทีเพื่อ wire CI gate ตั้งแต่ day 1
-- v3.1 merged `/setup-project` เข้ามาเป็น `--quick` mode (alias เก่ายัง work ผ่าน v3.x)
+- `--quick` mode แทน `/setup-project` เดิม (ไม่มี alias เหลือ)

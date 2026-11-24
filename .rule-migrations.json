@@ -3378,6 +3378,16 @@
         "Put the confirmed hypothesis in the commit or PR message"
       ],
       "reason": "4.2.0 compresses adjacent cleanup wording to fit the existing diagnose context budget without changing this evidence requirement."
+    },
+    {
+      "source": "skills/workflow/cook/SKILL.md",
+      "old_fragment": "user's request to cook, flags included",
+      "replacement": "skills/workflow/cook/SKILL.md",
+      "requires": [
+        "user's request with the leading intent word",
+        "every flag kept"
+      ],
+      "reason": "4.2.0 fix: `$ARGUMENTS` for a workflow now strips the leading intent word so `cook init --quick` and `cook review --debt` reach the moved workflow bodies as the old command arguments; flags are still passed."
     }
   ]
 }

@@ -117,7 +117,7 @@ Verdict:
 
 ### 6. Code Review (Phase 3b — review axes, one fresh spawn each)
 
-> Method = `shode-house:review-checklist` (`Skill` tool — อยู่ใน allowed-tools แล้ว). Axis plan = `output-styles/shode-house.md` § Review card:
+> Method = `shode-house:review-checklist` (`Skill` tool). Axis plan = `output-styles/shode-house.md` § Review card:
 > record it as the `[REVIEW DISPATCH CARD]`, then dispatch every DISPATCH axis only after `shode-house:build` has returned;
 > spec is always DISPATCH; runtime, security and domain rules → `references/workflows/review.md` § Step 1 (rules 1-2)
 

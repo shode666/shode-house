@@ -55,7 +55,7 @@ class MigrationTest(unittest.TestCase):
                 migrations.load(ROOT)
 
     def test_current_migrations_validate(self):
-        self.assertEqual(364, len(migrations.load(ROOT)))  # +10 v4.2 repository reuse and scoped diagnosis; 354 before
+        self.assertEqual(365, len(migrations.load(ROOT)))  # +1 cook $ARGUMENTS definition, +10 v4.2 repository reuse and scoped diagnosis; 354 before
 
     def test_each_replacement_anchor_is_required(self):
         for item in self.data["migrations"]:

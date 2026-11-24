@@ -1,4 +1,4 @@
-> 🗺️ **ก่อนเริ่ม — งานนี้ใหญ่เกิน 1 spec ไหม?** ถ้า user มาด้วยไอเดียก้อนใหญ่ที่ยังมองไม่เห็นทาง (ตอบไม่ได้ว่า "เสร็จ" หน้าตายังไง / มี decision ต้องตัดก่อนถึงจะ spec ได้) → **หยุด แล้วทำ Map ก่อน** (`skills/discipline/shode-house-workflow/wayfinding.md`). command นี้สมมติว่ารูปงานนิ่งแล้ว — ใช้กับ fog จะได้ spec ที่เขียนจากการเดา
+> 🗺️ **ก่อนเริ่ม — งานนี้ใหญ่เกิน 1 spec ไหม?** ถ้า user มาด้วยไอเดียก้อนใหญ่ที่ยังมองไม่เห็นทาง (ตอบไม่ได้ว่า "เสร็จ" หน้าตายังไง / มี decision ต้องตัดก่อนถึงจะ spec ได้) → **หยุด แล้วทำ Map ก่อน** (`skills/discipline/shode-house-workflow/wayfinding.md`). workflow นี้สมมติว่ารูปงานนิ่งแล้ว — ใช้กับ fog จะได้ spec ที่เขียนจากการเดา
 
 📝 **Spec phase** สำหรับ: **$ARGUMENTS**
 
@@ -256,4 +256,4 @@ User responses → M2 classify:
 - After spec → `cook implement bd-<id>` (normal) หรือ STOP (`--stop`)
 - After estimation (user explicit ขอ) → ส่งต่อ `plan` (discover mode) สำหรับ opportunity sizing + user external report
 - เมื่อ Domain Evidence cite → invoke `shode-house:secure` skill ถ้า touch PII / payment / auth
-- v3.1 merged `/spec-only` เข้ามาเป็น `--stop --estimate` flags (alias เก่ายัง work ผ่าน v3.x)
+- `--stop --estimate` flags แทน `/spec-only` เดิม (ไม่มี alias เหลือ)

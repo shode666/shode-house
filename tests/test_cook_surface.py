@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,6 +153,60 @@ class CookSurfaceTest(unittest.TestCase):
         source_skills, _, _ = scan.shipped_names(str(ROOT))
         self.assertIn("cook", source_skills)
         self.assertNotIn("ask", skills | source_skills)   # tombstone-allow
+
+    def test_arguments_definition_strips_the_intent_word_and_the_workflows_agree(self):
+        cook = (ROOT / "skills/workflow/cook/SKILL.md").read_text()
+        self.assertIn("`$ARGUMENTS` = the\nuser's request with the leading intent word", cook)
+        self.assertIn('`cook init --quick "x"` gives `--quick "x"`', cook)
+        self.assertIn("`cook review KJERP-402` gives `KJERP-402`", cook)
+        self.assertIn("prompt-level rule", cook)
+
+    @staticmethod
+    def bash_block(workflow, marker):
+        text = (ROOT / f"references/workflows/{workflow}.md").read_text()
+        for block in re.findall(r"```bash\n(.*?)```", text, re.S):
+            if marker in block:
+                return block
+        raise AssertionError(f"no bash block with {marker!r} in {workflow}")
+
+    def run_bash(self, script, cwd=None):
+        return subprocess.run(["bash", "-c", script], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+
+    def test_init_mode_detection_runs_quick_for_the_stripped_arguments(self):
+        block = self.bash_block("init", "MODE=")
+        for args, mode, stack in (
+            ('--quick "go api"', "quick", '"go api"'),
+            ("", "interactive", ""),
+            ("my-project", "interactive", ""),
+        ):
+            with self.subTest(arguments=args):
+                out = self.run_bash(f'ARGUMENTS=\'{args}\'\n{block}\necho "$MODE|$STACK"')
+                self.assertEqual(f"{mode}|{stack}", out)
+
+    def test_review_debt_and_target_checks_match_the_stripped_arguments(self):
+        review = (ROOT / "references/workflows/review.md").read_text()
+        self.assertIn("ถ้า `$ARGUMENTS` = `--debt`", review)           # `cook review --debt` gives exactly `--debt`
+        self.assertIn('getJiraIssue(issueIdOrKey="$ARGUMENTS")', review)  # `cook review KJERP-402` gives only the key
+
+    def test_init_brownfield_guard_treats_a_git_file_and_dir_as_existing_repo(self):
+        block = self.bash_block("init", "PROJECT=")
+        cases = {
+            "fresh": lambda d: None,
+            "git-dir": lambda d: (d / ".git").mkdir(),
+            "git-file-worktree": lambda d: (d / ".git").write_text("gitdir: /elsewhere/.git/worktrees/x\n"),
+            "manifest-only": lambda d: (d / "package.json").write_text("{}"),
+        }
+        expected = {"fresh": "fresh", "git-dir": "brownfield", "git-file-worktree": "brownfield", "manifest-only": "brownfield"}
+        for name, setup in cases.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
+                setup(Path(tmp))
+                self.assertEqual(expected[name], self.run_bash(f'{block}\necho "$PROJECT"', cwd=tmp))
+
+    def test_moved_workflows_carry_no_stale_command_wording(self):
+        for name in WORKFLOWS:
+            text = (ROOT / f"references/workflows/{name}.md").read_text()
+            for stale in ("allowed-tools", "alias เก่า", "/automate-test", "Command นี้", "command นี้"):
+                self.assertNotIn(stale, text, f"{name}: {stale}")
 
 
 if __name__ == "__main__":
