@@ -30,8 +30,9 @@ fi
 ตรวจว่า fresh หรือ brownfield ก่อน scaffold:
 
 ```bash
-# brownfield = มี git repo (.git เป็น dir หรือ file ของ worktree) / manifest / source อยู่แล้ว
-{ [ -e .git ] || ls package.json pyproject.toml go.mod build.gradle* Cargo.toml pom.xml 2>/dev/null | grep -q . ; } && PROJECT="brownfield" || PROJECT="fresh"
+# brownfield = มี git repo (.git เป็น dir / file ของ worktree / symlink แม้ชี้ไปที่ไม่มี) หรือมีไฟล์ใด ๆ (manifest, source, dotfile)
+# fresh = โฟลเดอร์ว่างเท่านั้น (false brownfield ปลอดภัย; false fresh ทับไฟล์เดิม)
+{ [ -e .git ] || [ -L .git ] || ls -A | grep -q . ; } && PROJECT="brownfield" || PROJECT="fresh"
 ```
 
 - **fresh** → scaffold เต็ม (Phase 2 / Mode B ตามปกติ)

@@ -49,12 +49,17 @@ Fast path floor = `build` alone, targeted test as evidence; never lighter than t
 
 ## Workflow selection
 
-This is the only entry; pick the workflow by intent. In a workflow, `$ARGUMENTS` = the
+This is the only entry; pick the workflow by intent. When a workflow suggests another one, continue
+here with that intent; no second entry exists.
+
+User request: $ARGUMENTS
+
+A workflow's `ARGUMENTS` (written with a leading dollar sign inside the workflow files) = the
 user's request with the leading intent word (`init`, `spec`, `implement`, `review`)
 removed and every flag kept (`cook init --quick "x"` gives `--quick "x"`;
-`cook review KJERP-402` gives `KJERP-402`); consult gets the whole request. Read-only
-consult and review are a prompt-level rule; the host permission mode enforces it. When a workflow suggests another one, continue
-here with that intent; no second entry exists.
+`cook review KJERP-402` gives `KJERP-402`); consult gets the whole request.
+
+Read-only consult and review are a prompt-level rule; the host permission mode enforces it.
 
 | Intent | Workflow | Notes |
 |---|---|---|

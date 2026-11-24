@@ -156,7 +156,10 @@ class CookSurfaceTest(unittest.TestCase):
 
     def test_arguments_definition_strips_the_intent_word_and_the_workflows_agree(self):
         cook = (ROOT / "skills/workflow/cook/SKILL.md").read_text()
-        self.assertIn("`$ARGUMENTS` = the\nuser's request with the leading intent word", cook)
+        self.assertEqual(1, cook.count("$ARGUMENTS"))   # only the deliberate substitution line
+        self.assertIn("\nUser request: $ARGUMENTS\n", cook)
+        self.assertIn("`ARGUMENTS` (written with a leading dollar sign inside the workflow files) = the\nuser's request with the leading intent word", cook)
+        self.assertIn("every flag kept", cook)
         self.assertIn('`cook init --quick "x"` gives `--quick "x"`', cook)
         self.assertIn("`cook review KJERP-402` gives `KJERP-402`", cook)
         self.assertIn("prompt-level rule", cook)
@@ -188,19 +191,29 @@ class CookSurfaceTest(unittest.TestCase):
         self.assertIn("ถ้า `$ARGUMENTS` = `--debt`", review)           # `cook review --debt` gives exactly `--debt`
         self.assertIn('getJiraIssue(issueIdOrKey="$ARGUMENTS")', review)  # `cook review KJERP-402` gives only the key
 
-    def test_init_brownfield_guard_treats_a_git_file_and_dir_as_existing_repo(self):
+    def test_init_brownfield_guard_treats_any_existing_content_as_brownfield(self):
         block = self.bash_block("init", "PROJECT=")
+
+        def dangling_link(d):
+            (d / ".git").symlink_to(d / "no-such-target")
+
+        def source_only(d):
+            (d / "app.py").write_text("print(1)\n")
+            (d / "src").mkdir()
+
         cases = {
-            "fresh": lambda d: None,
-            "git-dir": lambda d: (d / ".git").mkdir(),
-            "git-file-worktree": lambda d: (d / ".git").write_text("gitdir: /elsewhere/.git/worktrees/x\n"),
-            "manifest-only": lambda d: (d / "package.json").write_text("{}"),
+            "fresh": (lambda d: None, "fresh"),
+            "git-dir": (lambda d: (d / ".git").mkdir(), "brownfield"),
+            "git-file-worktree": (lambda d: (d / ".git").write_text("gitdir: /elsewhere/.git/worktrees/x\n"), "brownfield"),
+            "git-dangling-symlink": (dangling_link, "brownfield"),
+            "manifest-only": (lambda d: (d / "package.json").write_text("{}"), "brownfield"),
+            "source-only": (source_only, "brownfield"),
+            "dotfile-only": (lambda d: (d / ".env.example").write_text("A=1\n"), "brownfield"),
         }
-        expected = {"fresh": "fresh", "git-dir": "brownfield", "git-file-worktree": "brownfield", "manifest-only": "brownfield"}
-        for name, setup in cases.items():
+        for name, (setup, expected) in cases.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
                 setup(Path(tmp))
-                self.assertEqual(expected[name], self.run_bash(f'{block}\necho "$PROJECT"', cwd=tmp))
+                self.assertEqual(expected, self.run_bash(f'{block}\necho "$PROJECT"', cwd=tmp))
 
     def test_moved_workflows_carry_no_stale_command_wording(self):
         for name in WORKFLOWS:

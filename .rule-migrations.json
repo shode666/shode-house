@@ -3387,7 +3387,7 @@
         "user's request with the leading intent word",
         "every flag kept"
       ],
-      "reason": "4.2.0 fix: `$ARGUMENTS` for a workflow now strips the leading intent word so `cook init --quick` and `cook review --debt` reach the moved workflow bodies as the old command arguments; flags are still passed."
+      "reason": "4.2.0 fix: a workflow's ARGUMENTS now strips the leading intent word so `cook init --quick` and `cook review --debt` reach the moved workflow bodies as the old command arguments; flags are still passed."
     }
   ]
 }
