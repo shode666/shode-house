@@ -126,7 +126,7 @@
     {
       "source": "skills/workflow/meeting/SKILL.md",
       "old_fragment": "- Agents ที่บอก *\"ยึด meeting skill เป็น discipline foundation\"* ยังถูกต้อง — meeting skill ตอนนี้ = thin entry-point + Recite Card + index",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "orientation summaries only — each detail stays with its owner skill"
       ],
@@ -135,7 +135,7 @@
     {
       "source": "skills/workflow/meeting/SKILL.md",
       "old_fragment": "- เนื้อหา 1316 บรรทัดเดิมยังอยู่ครบ — แค่กระจายไปยัง 7 sub-skills + reference table ในไฟล์นี้",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "orientation summaries only — each detail stays with its owner skill"
       ],
@@ -144,7 +144,7 @@
     {
       "source": "skills/workflow/meeting/SKILL.md",
       "old_fragment": "- The historical line-count reduction is not a measured token or quality result.",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "orientation summaries only — each detail stays with its owner skill"
       ],
@@ -200,7 +200,7 @@
       "old_fragment": "wayfinding (fog) → design-system (spec) → ค่อยแตก",
       "replacement": "skills/workflow/decompose/SKILL.md",
       "requires": [
-        "ยังไม่มี spec → `/design-system`"
+        "ยังไม่มี spec → `cook spec`"
       ],
       "reason": "Anti-pattern table cell restated When NOT to use (fog → wayfinding) and the signed-off-spec required input; the design-system route is kept under Required inputs."
     },
@@ -852,7 +852,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "schema or migration) move the task up, and the edit still gets independent review (Dave implements, Chris reviews)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Fast path floor = `build` alone, targeted test as evidence",
         "any one moves the task up to Bounded, where `verify` (standards axis) reviews"
@@ -2334,7 +2334,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "prerequisites, then the applicable runbook",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "follow the router style and the harness, then the applicable runbook",
         "references/runbooks/router-engagement.md"
@@ -2551,7 +2551,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Producers (Dave/Chris/Quinn/Aaron/Uma/Bella/Sara/Felix/...)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Producers (`build`/`verify`/`operate`/`design`/`plan`/`secure`)"
       ],
@@ -2560,7 +2560,7 @@
     {
       "source": "skills/workflow/meeting/SKILL.md",
       "old_fragment": "Producers (Dave/Chris/Quinn/Aaron/Uma/Bella/Sara/Felix/...)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Producers (`build`/`verify`/`operate`/`design`/`plan`/`secure`)"
       ],
@@ -2658,10 +2658,10 @@
     },
     {
       "source": "agents/orchestrator.md",
-      "old_fragment": "**อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)",
+      "old_fragment": "**อย่าเพิ่งเข้า `cook spec`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)",
       "replacement": "skills/discipline/shode-house-workflow/wayfinding.md",
       "requires": [
-        "**อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)"
+        "**อย่าเพิ่งเข้า `cook spec`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)"
       ],
       "reason": "v4 S3 (W10b): agents/orchestrator.md is deleted (ADR §5.2, retired type; router = output style). UD R72 / erratum 3 §1.16: moved verbatim into the wayfinding.md entry-criteria block."
     },
@@ -2697,10 +2697,10 @@
     },
     {
       "source": "agents/product-manager.md",
-      "old_fragment": "**อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)",
+      "old_fragment": "**อย่าเพิ่งเข้า `cook spec`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)",
       "replacement": "skills/discipline/shode-house-workflow/wayfinding.md",
       "requires": [
-        "**อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)"
+        "**อย่าเพิ่งเข้า `cook spec`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)"
       ],
       "reason": "UD R72 (W5a thinned the product-manager body): moved verbatim into the wayfinding.md entry-criteria block."
     },
@@ -2773,7 +2773,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "- **R0 actions** = STOP + ask (deploy prod, delete data, money movement, schema migration prod)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "the `## Safety floor` R0 line (router style; every agent body; the floor block at the top of this skill on a host without the style), not restated here",
         "prod deploy and data migration also keep their `pre-deploy-prod` / `pre-data-migration` gates"
@@ -2783,7 +2783,7 @@
     {
       "source": "skills/workflow/meeting/SKILL.md",
       "old_fragment": "- **R0 actions** = STOP + ask (deploy prod, delete data, money movement, schema migration prod)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "the `## Safety floor` R0 line (router style; every agent body; the floor block at the top of this skill on a host without the style), not restated here",
         "prod deploy and data migration also keep their `pre-deploy-prod` / `pre-data-migration` gates"
@@ -3126,7 +3126,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Product discovery and outcome priorities",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Discovery, requirements and acceptance, architecture, the spec axis"
       ],
@@ -3135,7 +3135,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Cross-team technical depth and consistency",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "staff-grade briefs (cross-team consistency, refactor strategy)"
       ],
@@ -3144,7 +3144,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Payments, ledger and financial rules",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "domain consult and the domain axis with"
       ],
@@ -3153,7 +3153,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Enterprise resource and accounting processes",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "domain consult and the domain axis with"
       ],
@@ -3162,7 +3162,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "SAP integration and platform expertise",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "domain consult and the domain axis with"
       ],
@@ -3171,7 +3171,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Producers (developer/code-reviewer/qa-engineer/devops-engineer/ux-ui-designer/business-analyst/solution-architect/fintech-expert/...)",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Producers (`build`/`verify`/`operate`/`design`/`plan`/`secure`)"
       ],
@@ -3243,7 +3243,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "- No shode-house output style in this session's system prompt (the router style that makes this main session the team lead; absent on Codex, Cursor, Antigravity and on a surface without plugin output styles; the safety-floor block in this skill's adapter is not that style): team execution is unavailable",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "team execution is available only through genuine",
         "If delegation is unavailable, state that team execution is unavailable"
@@ -3253,7 +3253,7 @@
     {
       "source": "skills/workflow/ask/SKILL.md",
       "old_fragment": "Never spawn or delegate shode-house roles; report `BLOCKED: team execution needs the router style (Claude Code)`, then help in this one session; never present it as independent review or role-play a team.",
-      "replacement": "skills/workflow/ask/SKILL.md",
+      "replacement": "skills/workflow/cook/SKILL.md",
       "requires": [
         "Never replace a separate worker with a persona summary or role-play",
         "keep required independent acceptance BLOCKED"

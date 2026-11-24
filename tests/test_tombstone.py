@@ -11,20 +11,20 @@ a line carrying the `tombstone-allow` marker - the `source` / `old_fragment` val
 .rule-migrations.json (exact quotes of baseline text the conservation gate needs; `replacement`,
 `requires` and `reason` ARE scanned, so a migration can never point at a retired name).
 Not scanned: files pinned by eval/FREEZE.sha256 (frozen probe protocol `probe-freeze-3.17`: they are
-hash-locked, so a hit there could never be fixed; they were verified to reference `ask`, not a retired
-skill, when the freeze was cut).
+hash-locked, so a hit there could never be fixed; they were verified to reference the entry ask (retired in 4.2.0,
+renamed `cook`) or a role word, not another retired skill, when the freeze was cut; `tombstone-allow`).
 Run: python3 tests/test_tombstone.py   (CI gate #11 runs it; also collected by pytest)
 """
 import json, pathlib, re, sys, tempfile, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
-from test_team_package import RETIRED  # noqa: E402  (the single retired-names list)
+from test_team_package import RENAMED, RETIRED  # noqa: E402  (the single retired-names list; RENAMED adds the post-baseline ask -> cook)
 # v4.0.0 (ledger W2 coupled_W10_edit): RETIRED also names the retired agent file and the old output style
 # (agents/orchestrator.md, output-styles/oliver.md). Name patterns here are skill patterns, so they are derived
 # from the skill keys only; the persona/agent tombstone is A6 (tests/test_skill_names.py), and every key -- skill
 # or not -- must still be absent with its replacement present (test_retired_dirs_are_gone_and_replacements_exist).
-SKILL_RETIRED = {k: v for k, v in RETIRED.items() if k.startswith("skills/")}
+SKILL_RETIRED = {k: v for k, v in {**RETIRED, **RENAMED}.items() if k.startswith("skills/")}
 # v4.0.1 (shode-house-jni): the 18 agent ids retired by the 6-type consolidation. No stub file, no manifest entry, and no spawn
 # or path form of an old id anywhere on the scanned surface; the old ids may be named only as data (the Formerly table of
 # ownership.md, README/CHANGELOG, the retired-names ledger and the plain role names tests use as fixtures).
@@ -122,13 +122,13 @@ def scan_agents(root=ROOT, ids=None):
 
 class TombstoneTest(unittest.TestCase):
     def test_retired_dirs_are_gone_and_replacements_exist(self):
-        for old, new in RETIRED.items():
+        for old, new in {**RETIRED, **{k: v for k, v in RENAMED.items() if k.startswith("skills/")}}.items():
             if old.startswith("skills/"):
                 self.assertFalse((ROOT / old).parent.exists(), f"retired skill dir still present: {old}")
             else:   # a retired agent file or output style: the file itself is gone (its directory stays)
                 self.assertFalse((ROOT / old).exists(), f"retired file still present: {old}")
             self.assertTrue((ROOT / new).is_file(), f"replacement owner missing: {new}")
-        self.assertEqual(4, len(SKILL_RETIRED))
+        self.assertEqual(5, len(SKILL_RETIRED))
 
     def test_no_retired_name_on_the_scanned_surface(self):
         self.assertEqual([], scan())

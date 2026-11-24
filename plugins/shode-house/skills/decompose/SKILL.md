@@ -27,7 +27,7 @@ description: Split an agreed, signed-off scope into small, independently verifia
 - [ ] **Interface contract** ถ้าข้าม service/module (`plan` (architecture mode) กำหนดก่อน ผ่าน `api-contract` — ดู § Chunk)
 
 ขาดข้อใด → list สิ่งที่ขาด แล้วหยุด ห้ามเดา
-ยังไม่มี spec → `/design-system` (`plan` (requirements mode) ∥ `plan` (architecture mode) ผลิต BRD + ADR) ก่อน แล้วค่อยแตก
+ยังไม่มี spec → `cook spec` (`plan` (requirements mode) ∥ `plan` (architecture mode) ผลิต BRD + ADR) ก่อน แล้วค่อยแตก
 
 ## 🎯 Tracer bullet — เกณฑ์เดียวที่ตัดสินว่าแตกถูกหรือผิด
 
@@ -71,7 +71,7 @@ contract เปลี่ยนกลางทาง = **spec change** → canoni
 
 ## ✂️ Process
 
-1. **อ่าน spec + outcome** — ถ้าเป็น XL ให้ดู T-shirt ต่อ module จาก `/design-system --estimate` (ถ้ามี) เป็นจุดตั้งต้นของการแบ่ง
+1. **อ่าน spec + outcome** — ถ้าเป็น XL ให้ดู T-shirt ต่อ module จาก `cook spec --estimate` (ถ้ามี) เป็นจุดตั้งต้นของการแบ่ง
 2. **ร่าง leaf จาก AC ไม่ใช่จาก layer** — ไล่ user story/AC แล้วถามทีละข้อว่า "ข้อนี้ merge เดี่ยว ๆ แล้วมีคนได้อะไรไหม"
 3. **เช็คขนาด** (§ เล็กพอหรือยัง) → ยังใหญ่ก็แตกต่อ (≤ 2 ชั้น)
 4. **หา dep จริง** — เขียน edge ลงกระดาษก่อน แล้วถามทุกเส้นว่า "ถ้าไม่มีเส้นนี้ ใบหลังพังตรงไหน" ตอบไม่ได้ = edge ปลอม ตัดทิ้ง
@@ -82,4 +82,4 @@ contract เปลี่ยนกลางทาง = **spec change** → canoni
 Resolve source-root paths beginning agents/, skills/, references/, commands/ or output-styles/ under this plugin's knowledge/ directory, not the user's project.
 Resolve paths beginning ./ or ../ from this file's own directory; resolve other relative file names in this skill under this plugin's knowledge/skills/workflow/decompose/ directory.
 Use actual host tools and preserve host/project/user authority.
-No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:ask` first.
+No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:cook` first.

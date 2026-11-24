@@ -23,7 +23,6 @@ LICENSE
 
 # --- discovery surface (plugin.json `skills` + default scan paths)
 agents
-commands
 skills/workflow
 skills/ops
 skills/ui

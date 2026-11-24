@@ -37,7 +37,7 @@ Mode: [AFK | Interactive | Hybrid (default)]   ← Sandcastle-inspired
 Tracker: [bd | github | linear | jira | asana]   ← Pluggable
 
 (ห้ามใส่ T-shirt size / man-day / timeline ใน plan โดย default;
- ใช้เฉพาะ user explicit ขอ `/design-system --estimate` หรือ "ช่วยประเมิน effort")
+ ใช้เฉพาะ user explicit ขอ `cook spec --estimate` หรือ "ช่วยประเมิน effort")
 
 Risk:
 | # | Risk | Likelihood | Impact | Mitigation |

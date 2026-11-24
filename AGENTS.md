@@ -49,7 +49,7 @@ The rules are stated in this file and nowhere else. The linked files add detail,
 ## Skills
 
 - Shipped buckets = `workflow/` · `ops/` · `ui/` · `style/` · `discipline/` (20 skills): each bucket path is in the `.claude-plugin/plugin.json` skills list (CI #3) and each skill is linked in the `README.md` index (CI #11b). `in-progress/` + `deprecated/` never ship and are never listed (CI #2).
-- The 4 skill names retired in v3.17 have no stub and must not come back (`tests/test_tombstone.py`).
+- The 4 skill names retired in v3.17, and the former entry skill (named ask until 4.2.0, renamed `cook`), have no stub and must not come back (`tests/test_tombstone.py`).
 - SKILL.md description = 1–2 English sentences: capability + decision boundary (what it is for, and the nearest thing it is not for) — no trigger/keyword lists, no fixed section format; ≤ 320 chars (CI #9).
 - SKILL.md ≤ 300 lines, no exception; over → split into a sibling reference file (CI #1). Size in bytes: a preloaded skill is capped by CI #16, the rest by the line cap.
 - A skill that produces a deliverable has `## When NOT to use` + `## Inputs and decision boundaries` with a non-empty `### Stop and return` (CI #24c enforces this on 6 roots: dev-gate · decompose · drain · secure · review-checklist · diagnose; other skills may still use `## Required inputs — <condition>`, but never the words "refuse without").
@@ -62,7 +62,7 @@ The rules are stated in this file and nowhere else. The linked files add detail,
 ## Commands
 
 - **3-flag rule**: ห้ามเพิ่ม command ใหม่ถ้า command เดิม + ≤ 3 flag/mode รองรับได้. เกิน 3 → ค่อยแตก
-- Deprecated command keep เป็น alias 1–2 release window แล้วลบ (skill = no stub: test_tombstone)
+- Deprecated command keep เป็น alias 1–2 release window แล้วลบ (skill = no stub: test_tombstone). Exception, one time (4.2.0, user decision shode-house-wy5): the entry consolidation removed all six public entries at once with no alias window; `cook` is the single entry (a skill) and `commands/` is gone
 
 ## Agents
 
@@ -104,15 +104,15 @@ The rules are stated in this file and nowhere else. The linked files add detail,
 
 - YAGNI ladder (dev-gate Step 0) + caveman compression ตัดได้เฉพาะความซับซ้อน/word ที่ยังไม่ต้องใช้
 - **ห้ามตัด**: trust-boundary validation · data-loss handling · security control · accessibility (WCAG) · regulation/compliance
-- ทางลัดที่ defer → `shortcut(bd:<id>): <reason>; upgrade → <path>` → `grep -rn 'shortcut(bd' .` / `/review --debt`
+- ทางลัดที่ defer → `shortcut(bd:<id>): <reason>; upgrade → <path>` → `grep -rn 'shortcut(bd' .` / `cook review --debt`
 - Memory-file compress → เก็บ `<file>.full.md` + verify CI gate (push → CI เขียว) เหมือนเดิม
-- **Runtime guarantee = generate, don't ship**: the plugin ships only the contract (principle + method). The harness contract must be established on every project entry (`/init` rule 11 → `.shode-house/config.yaml`). A guarantee that must be enforced at runtime → **`operate`** (infra/CI-level; app-level → `build`) generates a runner that fits the project, following the contract in `references/patterns/durable-agent-runtime.md`, into the **target project repo** (through dev-gate); never ship a generic script in the plugin. No need = no runner (YAGNI), but the contract must exist.
+- **Runtime guarantee = generate, don't ship**: the plugin ships only the contract (principle + method). The harness contract must be established on every project entry (`cook init` rule 11 → `.shode-house/config.yaml`). A guarantee that must be enforced at runtime → **`operate`** (infra/CI-level; app-level → `build`) generates a runner that fits the project, following the contract in `references/patterns/durable-agent-runtime.md`, into the **target project repo** (through dev-gate); never ship a generic script in the plugin. No need = no runner (YAGNI), but the contract must exist.
 
 ## Budgets · rule conservation · generated tree (v3.17)
 
 - The 4 budget files (`.skill-metadata-budget` · `.preload-budget` · `.agent-core-budget` · `.workflow-scenario-budget`) are measured values and only go down. Never add a budget file or raise a key/grace to get green — cut non-safety text in the same change.
 - Deleting or rewording a rule line in a shipped skill/agent needs a `.rule-migrations.json` entry + count pin in `tests/test_rule_migrations.py` (gate = `scripts/rule-conservation.py`). A rule with a `root_only` anchor stays in the root file, not a lazy reference (CI #21).
-- `plugins/shode-house/**` = generated — `python3 scripts/pack-team.py --tree plugins/shode-house`; ห้ามแก้มือ (CI #25 `--check`); generated tree = source + footer (the source with plugin-root and `./`/`../` references re-pointed to its knowledge/ copy, plus a resolution footer; no thin adapters); `/ask` = the pinned wrapper
+- `plugins/shode-house/**` = generated — `python3 scripts/pack-team.py --tree plugins/shode-house`; ห้ามแก้มือ (CI #25 `--check`); generated tree = source + footer (the source with plugin-root and `./`/`../` references re-pointed to its knowledge/ copy, plus a resolution footer; no thin adapters); `cook` = the single entry skill (no commands, no wrapper)
 - Shipped surface = tracker-neutral: ห้าม hardcode `bd <verb>` (`tests/test_tracker_neutral.py`); tracker ตาม target project
 - skills/agents/commands/output-styles ห้ามพึ่ง `CHANGELOG.md` / `SHODE-HOUSE-MASTER.md` (maintainer history เท่านั้น)
 - Frozen probe protocol: ไฟล์ที่ pin ใน `eval/FREEZE.sha256`, `eval/scenarios/core-4.0/FREEZE.sha256` และ `eval/shape-baseline/FREEZE.sha256` ห้ามแก้ (`bash eval/check-freeze.sh`, `bash eval/scenarios/core-4.0/check-freeze.sh`, `bash eval/shape-baseline/check-freeze.sh`)

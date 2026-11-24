@@ -425,11 +425,11 @@ class DomainTierTest(unittest.TestCase):
         core = " ".join((ROOT / "skills/discipline/domain-core/SKILL.md").read_text().split())
         self.assertIn("`opus` for fintech, sap, trading, insurance; erp, booking, ecommerce at the type default unless the dispatch "
                       "records a high-stakes reason for `opus`", core)
-        review = (ROOT / "commands/review.md").read_text()
+        review = (ROOT / "references/workflows/review.md").read_text()
         self.assertNotIn('`model: "opus"` (name: plan-domain)', review)
 
     def test_no_shipped_or_maintainer_text_says_one_opus_tier_for_all_seven(self):
-        for rel in ("README.md", "CHANGELOG.md", "output-styles/shode-house.md", "agents/plan.md", "commands/review.md",
+        for rel in ("README.md", "CHANGELOG.md", "output-styles/shode-house.md", "agents/plan.md", "references/workflows/review.md",
                     "skills/discipline/domain-core/SKILL.md", "skills/discipline/shode-house-routing/ownership.md"):
             text = " ".join((ROOT / rel).read_text().split())
             self.assertNotRegex(text, r"(?i)one tier (\(`?opus`?\) )?for all seven|opus for all (7|seven)", rel)

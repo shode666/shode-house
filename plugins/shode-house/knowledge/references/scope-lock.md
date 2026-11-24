@@ -241,7 +241,7 @@ use the harness's scoped ownership, serialized writes and honest enforcement lim
   ไว้**ก่อน**ชื่อแต่รันหลัง `cd` ใน command เดียวกัน (เช่น function body, `trap` หรือ loop:
   `trap 'chmod -R 0 ..' EXIT; cd .shode-house/approval`), symlink ที่วางไว้ใต้ `.shode-house/`
   (`ln -s .. .shode-house/approval/l`), relative path ใน **Bash call ถัดไป**
-  หลัง `cd .shode-house/approval` (call นั้นไม่มีชื่อ `.shode-house` ให้เห็นแล้ว) และ `git clean -fdX` / `-fdx` ซึ่งลบ `.shode-house` ที่ถูก ignore (`/init` เพิ่มลง `.gitignore`)
+  หลัง `cd .shode-house/approval` (call นั้นไม่มีชื่อ `.shode-house` ให้เห็นแล้ว) และ `git clean -fdX` / `-fdx` ซึ่งลบ `.shode-house` ที่ถูก ignore (`cook init` เพิ่มลง `.gitignore`)
   โดยไม่เอ่ยชื่อเลย
 - agent อื่นเขียนไฟล์คนอื่นผ่าน `echo >`/`cp`/`sed -i`/`tee`/heredoc นอก path ข้างบน **ยังผ่านได้**
   (advisory only, by design, ไม่ใช่ bug ที่เหลือ)

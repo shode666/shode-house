@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-COPY = ("agents", "commands", "output-styles", "skills", "references/runbooks", ".claude-plugin",
+COPY = ("agents", "references/workflows", "output-styles", "skills", "references/runbooks", ".claude-plugin",
         ".workflow-scenario-budget", "scripts/context-budget.py")
 
 

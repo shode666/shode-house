@@ -26,7 +26,7 @@ Usage: rule-conservation.py [--base <ref>] [--root-only <anchor> ...] [--with-st
      tag the report. Only the exact floor markers of scripts/floor.py (`<!-- floor:begin -->`,
      `<!-- floor:end -->`, `<!-- floor:style:begin -->`, `<!-- floor:style:end -->`) are skipped: any
      other HTML comment in a body is live prompt text and can carry a rule.
-  4. corpus = files that can really host a rule (skills + agents + commands + output-styles +
+  4. corpus = files that can really host a rule (skills + agents + commands + references/workflows (the 4.2.0 home of the commands) + output-styles +
      references/runbooks + references/domain, the 4.0.1 home of the domain rules and catalogues that were
      runbooks until then) in the working tree -- README/docs/eval describe rules, they do not hold them.
   5. tier: a removed line from a root-tier file (SKILL.md / agent file / output style without a `LOAD:` block) that
@@ -46,7 +46,8 @@ import argparse, importlib.util, json, os, pathlib, re, subprocess, sys
 THRESHOLD = 0.55
 TOKEN = re.compile(r'[A-Za-z][A-Za-z0-9_.\-]{2,}|[฀-๿]{3,}')
 STOP = {'ที่', 'และ', 'ของ', 'ให้', 'ไม่', 'เป็น', 'ต้อง', 'the', 'and', 'for', 'not'}
-HOST = ('skills/', 'agents/', 'commands/', 'output-styles/', 'references/runbooks/', 'references/domain/')
+HOST = ('skills/', 'agents/', 'commands/', 'output-styles/', 'references/runbooks/', 'references/domain/',
+        'references/workflows/')   # 4.2.0: the former commands/*.md, moved under cook (they host rules exactly as before)
 BUCKETS = 'workflow|ops|ui|style|discipline'
 SCOPE = re.compile(rf'skills/(?:{BUCKETS})/.+\.md|agents/[^/]+\.md')
 STYLE = re.compile(r'output-styles/[^/]+\.md')

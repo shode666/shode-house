@@ -21,7 +21,7 @@ Source snapshots are separate from the installed plugin; the working tree was no
 checked out or reset. Fixture uses confirmed Markdown records and no remote service.
 Task: reject nonnegative-safe-integer violations and clamp available inventory at zero.
 
-The pilot loaded the candidate ask entry, harness, implementation/review roles and
+The pilot loaded the candidate entry skill (then named ask), harness, implementation/review roles and
 prerequisites. PROJECT.md records Dave assignment and planned Chris review. Captured
 collaboration events show waits but do not establish completed independent review;
 role names in the checkpoint alone are not proof. Implementation and red/green test

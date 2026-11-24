@@ -38,7 +38,7 @@ Every mode: **R0 (irreversible) always asks first.**
 - **Output**: STRIDE + abuse case + security AC injected into Phase 1a
 - **Gate**: `pre-implement` — may block Phase 2 until it passes
 - **Note**: may run parallel with 1b when scopes are independent
-- Fast path vs full-workflow trigger → `ask` § Fast path or full workflow (single owner); fast path never skips this trigger.
+- Fast path vs full-workflow trigger → `cook` § Fast path or full workflow (single owner); fast path never skips this trigger.
 - 🔴 **No waiver**: a user's or agent's "low risk" claim does not waive Phase 1c when a trigger fired. ห้าม dispatch Phase 2 ก่อน Phase 1c gate ผ่าน
 
 ## ⏸️ Approval Gates

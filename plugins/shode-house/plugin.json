@@ -7,7 +7,7 @@
   "extensions": {
     "com.openai": {
       "hooks": "./codex-hooks/hooks.json",
-      "onboardingSkill": "./skills/ask/SKILL.md",
+      "onboardingSkill": "./skills/cook/SKILL.md",
       "interface": {
         "displayName": "Shode House",
         "shortDescription": "The full software-house expert team",

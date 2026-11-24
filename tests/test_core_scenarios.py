@@ -185,7 +185,7 @@ class CoreScenarioShapeTest(unittest.TestCase):
         import_lib = (ROOT / "eval/run-lib.sh").read_text(encoding="utf-8")
         self.assertIn("## Prompt", import_lib)   # the extractor this layout is written for
         skills, _ = shipped()
-        routable = (skills | RETIRING) - {"ask", "secure", "drain", "incident", "diagnose", "meeting"} | {"shode-house"}
+        routable = (skills | RETIRING) - {"cook", "secure", "drain", "incident", "diagnose", "meeting"} | {"shode-house"}
         seen = set()
         for s in self.all:
             path = ROOT / s["prompt"]

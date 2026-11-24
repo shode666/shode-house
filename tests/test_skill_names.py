@@ -241,7 +241,7 @@ class SkillNamesTest(unittest.TestCase):
 
     def test_planted_bare_spawn_is_found_in_style_commands_skills_only(self):
         line = "Then dispatch `build` with the task path."
-        for rel in ("output-styles/s.md", "commands/c.md", "skills/workflow/ask/SKILL.md", "references/runbooks/r.md"):
+        for rel in ("output-styles/s.md", "commands/c.md", "skills/workflow/cook/SKILL.md", "references/runbooks/r.md"):
             self.assertEqual([f"{rel}:1: spawn by bare type 'build' (use '{self.p}:build'; a bare name is served by a project agent)"],
                              self.find(line, rel))
         self.assertEqual([], self.find(line, "agents/x.md"))                 # agents/: no spawn tool from 4.0.0 (A1)

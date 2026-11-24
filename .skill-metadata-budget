@@ -9,9 +9,10 @@
 # v3.17 probe-gate fix: diagnose 285 -> 280, drain 292 -> 287 (measured, trigger-first descriptions), __total__ 5458 -> 5448
 # v3.17 Thai trigger restore (user 2026-09-22): diagnose 280 -> 280, drain 287 -> 277 (measured; Thai paid by tighter English; 'ปิด bd' -> 'ปิดงานค้าง' tracker-neutral), __total__ 5448 -> 5438
 # v4.0.0 switch (W10b, ledger W4 E1-2): shode-house-discipline description 181 -> 174 (measured), __total__ 5438 -> 5431
-__total__=5431
+# v4.2.0 (shode-house-wy5): ask renamed `cook` (key == dir, CI #22); 207 -> 193 (measured), __total__ 5431 -> 5417
+__total__=5417
 api-contract=340
-ask=207
+cook=193
 automate-test=270
 caveman=283
 data-migration=305

@@ -9,13 +9,5 @@
   "repository": "https://github.com/shode666/shode-house",
   "license": "MIT",
   "description": "Shode House: full expert team on Claude Code; skills-only, single session on Cursor.",
-  "skills": "./skills/",
-  "commands": [
-    "./commands/ask.md",
-    "./commands/consult.md",
-    "./commands/design-system.md",
-    "./commands/implement.md",
-    "./commands/init.md",
-    "./commands/review.md"
-  ]
+  "skills": "./skills/"
 }

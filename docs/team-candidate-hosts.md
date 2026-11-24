@@ -8,13 +8,13 @@ One tree serves four hosts:
 
 | Host | Manifest | What is discovered |
 |---|---|---|
-| Claude Code | `.claude-plugin/plugin.json` | 24 flat skills, 19 agent adapters, `/shode-house:ask` |
+| Claude Code | `.claude-plugin/plugin.json` | 20 flat skills, 6 agent role contracts, `/shode-house:cook` (4.2.0: no commands) |
 | Codex | `.codex-plugin/plugin.json` | 24 skills (agent files are not a Codex concept) |
-| Cursor | `.cursor-plugin/plugin.json` | skills + agents by folder discovery; `commands: []` because `commands/ask.md` uses the Claude command dialect |
+| Cursor | `.cursor-plugin/plugin.json` | skills + agents by folder discovery; `commands: []` (4.2.0: no host registers a command; cook is a skill) |
 | Antigravity | root `plugin.json` | skills only; agents are knowledge resources, not native registrations |
 
-Layout: `knowledge/` holds every original file byte-for-byte (19 `agents/*.md`, the five
-skill buckets, `references/`, `output-styles/`, `commands/`). `agents/` and `skills/` are
+Layout: `knowledge/` holds every original file byte-for-byte (the `agents/*.md`, the five
+skill buckets, `references/` incl. `references/workflows/`, `output-styles/`). `agents/` and `skills/` are
 thin discovery adapters whose only job is to make the host read the full source and its
 prerequisite skills. Adapter frontmatter is host-neutral: `name`, `description`, `tools`,
 `skills`, `model: inherit` (Claude `color` and model aliases are dropped so no host has to
@@ -31,10 +31,10 @@ CHANGELOG under the release entry, not here.
 
 | Host | Evidence so far | What counts as done |
 |---|---|---|
-| Claude Code | Live forward + resume runs (3.16.1), GitHub install + `/ask` reachability (3.16.1) | done; re-score any run with `scripts/team-run-check.py` |
-| Codex | app-server catalog read: 24 skills discovered (3.15 candidate) | one `ask` session on a fixture that delegates or honestly reports BLOCKED; capture the transcript |
-| Cursor | manifest/discovery only | install from this repo, run `ask` on a fixture, confirm a subagent from `agents/` actually starts |
-| Antigravity | manifest/discovery only | install into `.agents/plugins/`, run `ask`; expected result is Oliver reporting team execution BLOCKED (no delegation tool) |
+| Claude Code | Live forward + resume runs (3.16.1), GitHub install + entry reachability (3.16.1, under its former name; renamed `cook` in 4.2.0, so re-run reachability) | done; re-score any run with `scripts/team-run-check.py` |
+| Codex | app-server catalog read: 24 skills discovered (3.15 candidate) | one `cook` session on a fixture that delegates or honestly reports BLOCKED; capture the transcript |
+| Cursor | manifest/discovery only | install from this repo, run `cook` on a fixture, confirm a subagent from `agents/` actually starts |
+| Antigravity | manifest/discovery only | install into `.agents/plugins/`, run `cook`; expected result is Oliver reporting team execution BLOCKED (no delegation tool) |
 
 Gather host evidence with the same fixture and prompts as `outputs/live-3.16.1/run.sh`
 (maintainer machine); a host is "supported" in the README only after its row is done.

@@ -2677,11 +2677,11 @@ ev=$(printf '%s' "${res#*$'\t'}" | jq -r '.hookSpecificOutput.hookEventName' 2>/
 assert_eq "$ev" "SessionStart" "hookEventName"
 rm -rf "$CS"
 
-t_start "shadow-cmd-nested: .claude/commands/shode-house/ask.md -> DENY; .claude/commands/shode-house:review.md -> DENY"
-CS=$(sandbox); mkdir -p "$CS/.claude/commands/shode-house"; : > "$CS/.claude/commands/shode-house/ask.md"
+t_start "shadow-cmd-nested: .claude/commands/shode-house/cook.md -> DENY; .claude/commands/shode-house:review.md -> DENY"
+CS=$(sandbox); mkdir -p "$CS/.claude/commands/shode-house"; : > "$CS/.claude/commands/shode-house/cook.md"
 res=$(cs_run "$CS" "$(cs_skill shode-house:secure)")
 assert_eq "${res%%$'\t'*}" "2" "nested command deny"
-assert_contains "${res#*$'\t'}" '.claude/commands/shode-house/ask.md' "names the nested command"
+assert_contains "${res#*$'\t'}" '.claude/commands/shode-house/cook.md' "names the nested command"
 rm -rf "$CS/.claude/commands/shode-house"; : > "$CS/.claude/commands/shode-house:review.md"
 res=$(cs_run "$CS" "$(cs_agent shode-house:verify)")
 assert_eq "${res%%$'\t'*}" "2" "colon command deny"
@@ -2703,17 +2703,32 @@ assert_contains "${res#*$'\t'}" "settings.local.json" "names the settings file"
 rm -rf "$CS"
 
 t_start "bare-legit: .claude/skills/secure/ (bare shipped name) -> warn at SessionStart, never deny"
-CS=$(sandbox); mkdir -p "$CS/.claude/skills/secure" "$CS/.claude/output-styles" "$CS/.claude/commands"
-: > "$CS/.claude/commands/implement.md"
+CS=$(sandbox); mkdir -p "$CS/.claude/skills/secure" "$CS/.claude/skills/cook" "$CS/.claude/output-styles" "$CS/.claude/commands"
+: > "$CS/.claude/commands/cook.md"
 printf -- '---\nname: shode-house\n---\n' > "$CS/.claude/output-styles/mine.md"
 res=$(cs_run "$CS" "$(cs_skill shode-house:secure)"); assert_eq "$res" "0"$'\t' "bare name does not deny and PreToolUse stays silent"
 res=$(cs_run "$CS" "$CS_SS"); ctx=$(cs_ctx "${res#*$'\t'}")
 assert_eq "${res%%$'\t'*}" "0" "SessionStart exit"
 assert_contains "$ctx" '".claude/skills/secure"' "bare skill warned"
-assert_contains "$ctx" '".claude/commands/implement.md"' "bare command warned"
+assert_contains "$ctx" '".claude/skills/cook"' "bare entry skill name warned"
+assert_contains "$ctx" '".claude/commands/cook.md"' "bare command named like the entry skill warned"
 assert_contains "$ctx" 'mine.md' "bare style name warned"
 assert_not_contains "$ctx" "will be denied" "warn-only wording"
 rm -rf "$CS"
+
+t_start "bare-flat-layout: the generated flat tree (skills/<name>/SKILL.md) names its shipped skills -> bare cook skill and command warned"
+if [ -f "$REPO_ROOT/plugins/shode-house/skills/cook/SKILL.md" ]; then
+  CS=$(sandbox); mkdir -p "$CS/.claude/skills/cook" "$CS/.claude/commands"; : > "$CS/.claude/commands/cook.md"
+  ctx=$(printf '%s' "$CS_SS" | CLAUDE_PROJECT_DIR="$CS" python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("cs", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+scan = m.run_scan(sys.argv[2], sys.argv[3])
+print("\n".join(scan.warn)); print("deny=%d" % len(scan.deny))' "$HOOKS_DIR/collision-scan.py" "$CS" "$REPO_ROOT/plugins/shode-house" 2>&1)
+  assert_contains "$ctx" '.claude/skills/cook' "flat layout: bare skill warned"
+  assert_contains "$ctx" '.claude/commands/cook.md' "flat layout: bare command named like a shipped skill warned"
+  assert_contains "$ctx" 'deny=0' "flat layout: warn only, never deny"
+  rm -rf "$CS"
+fi
 
 t_start "name-injection: hostile entry names are data -- charset-limited, truncated to 80, quoted, no tag break-out, no raw newline"
 CS=$(sandbox); mkdir -p "$CS/.claude/skills" "$CS/.claude/output-styles"

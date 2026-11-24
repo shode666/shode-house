@@ -27,7 +27,7 @@
 #      torn-write scan below run under a watchdog that kills their whole process group, so
 #      the hook ends inside its 10 s timeout (hooks/hooks.json): jq 2 x 0.25 s + NFC 2 s +
 #      torn scan 5 s.
-#   2. Engagement-only (.shode-house/state exists; a project that never ran /init gets the
+#   2. Engagement-only (.shode-house/state exists; a project that never ran cook init gets the
 #      status line and nothing else -- no file is written there):
 #      - .degraded gets a line when the status is ADVISORY-ONLY (ADR-C3/C8)
 #      - canary stamp (.hooks-alive) -- availability signal only, NOT an integrity proof

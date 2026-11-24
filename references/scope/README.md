@@ -30,7 +30,7 @@ This directory is the **script-checkable layer underneath that same discipline**
 
 They are meant to compose, not duplicate: an agent still posts the Scope Contract
 (scope-lock.md, unchanged), and whoever owns the manifest for a bd (the router, or an
-`/init`-time bootstrap step -- out of this milestone's scope) mirrors the `Files:`
+`cook init`-time bootstrap step -- out of this milestone's scope) mirrors the `Files:`
 field into a manifest under `.shode-house/scope/<bd-id>.json` so it becomes checkable
 by script instead of by re-reading chat history.
 

@@ -1,11 +1,12 @@
 """Candidate packaging invariants, not host-execution acceptance.
 
 v4 (ADR iter 5 F-4/§5.8, addendum 1 X11, erratum 1 r1 §5.8.1/§5.8.2): the generated tree carries
-agent files, skill roots and commands as the source with plugin-root and `./`/`../` references
+agent files and skill roots as the source with plugin-root and `./`/`../` references
 re-pointed to its knowledge/ copy (outside floor markers only), plus a generated footer; keeps
-`model:`, carries the style floor in the `ask` skill only, a pointer line in exactly the derived set
-of skills, and the pinned `/ask` wrapper. Every `./`/`../` reference in the tree's Markdown resolves
-(R53); agents and commands carry none, every code fence closes, and the tree holds no symlink
+`model:`, carries the style floor in the `cook` skill only, a pointer line in exactly the derived set
+of skills, and no commands (4.2.0: `cook` is the single entry, a skill; no wrapper, alias or adapter). Every
+`./`/`../` reference in the tree's Markdown resolves
+(R53); agents carry none, every code fence closes, and the tree holds no symlink
 (v7u.4.23: S21-1..3). Every rule has a mutation test below that turns `pack.audit` (or `--check`) red.
 """
 import contextlib
@@ -28,29 +29,9 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 # Directories the host scans for ACTIVE registrations at a plugin root. A style
 # under knowledge/ is inert data, so the three shipped shapes must agree on this set.
-REGISTRATION_DIRS = ("agents", "commands", "output-styles", "skills")
-# sha256 of the tree `commands/ask.md`. erratum 1 r1 (E1-1): the wrapper is NOT repointed; it keeps
-# resolving to the floor-carrying tree skill `${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md`.
-# Pin history (every change deliberate; the target path never changed):
-# - 079932a7b933efef2391361fa558aeaa470a3f7ef4bd5c83a717f6cafc908e27: 3.17.2 (git show
-#   1bc8174:plugins/shode-house/commands/ask.md).
-# - da47a5ba3fcc9bd44c6dc39861911dae47e143c3b351da29dc8f09af25138de9: W2 iter 2 (shode-house-v7u.4.9), the
-#   persona wording left the wrapper (A6); the description and the delegation sentence name the router and
-#   agent ids.
-# - fe5b3951ba31414c46c31e2bc285d6674468d24df261366b626b5bff9d6b0afe: S2 integration (v7u.4.12), Bella W2 L1
-#   conditional wording keyed on "the shode-house router style" (Chris C14-4 recorded this history).
-# - 71e85764d533e6b2977300acffa74701c610cd9877e8e85e065c49c6b3f64481: S2 fix-up (v7u.4.21, UD R52,
-#   Bella S2 M-1): the condition names no style; it is keyed on a working delegation tool (Agent or Task),
-#   as skills/workflow/ask/SKILL.md decides, so it holds at S2 and S3 alike.
-# - bed0181e3f85aa03c21f4212eb87a2e05aa5639150ed31356ae551f27f01a43e (current): W7 (v7u.4.18, UD R56, erratum 1
-#   §5.8.2): delegation also needs the ask skill not to report team execution unavailable; the wrapper defers to
-#   the skill's style-less-session rule and still names no style.
-# Any other edit of the wrapper must update this pin on purpose and add a line above.
-ASK_WRAPPER_PIN = "bed0181e3f85aa03c21f4212eb87a2e05aa5639150ed31356ae551f27f01a43e"
-# UD R56: the only delegation clause of the wrapper; it defers to the ask skill's decision.
-ASK_DELEGATE = ("If this session has a working delegation tool (Agent or Task) and the ask skill does not report "
-                "team execution unavailable, delegate")
-ASK_CODEX_RULE = "genuine\nseparate-worker delegation"
+# 4.2.0: `commands` left the set with the directory (cook is the single entry, a skill); the test below asserts none ships.
+REGISTRATION_DIRS = ("agents", "output-styles", "skills")
+ENTRY_CODEX_RULE = "genuine\nseparate-worker delegation"
 EXECUTOR = ('- Design run (the delegation names a design-run order and its sha256): run only `python3 -I '
             '"${CLAUDE_PLUGIN_ROOT}/references/design-intel/scripts/design_run.py" --order <path> --sha256 <hash>`.\n')
 EXECUTOR_TREE = '"${CLAUDE_PLUGIN_ROOT}/knowledge/references/design-intel/scripts/design_run.py"'
@@ -92,7 +73,7 @@ def registration_entries(paths):
 def source_paths():
     """Repo-relative paths the REPO-ROOT shape registers (what every eval installs).
 
-    `agents/`, `commands/` and `output-styles/` are the host's default scan; `skills/`
+    `agents/` and `output-styles/` are the host's default scan; `skills/`
     is not scanned by default here, so the roots come from the root manifest's own
     `skills` array -- which is why skills/in-progress/ and skills/deprecated/ are not
     registrations and must not enter the comparison.
@@ -181,9 +162,10 @@ class TeamCandidateTest(unittest.TestCase):
             manifest = json.loads(entries[name])
             self.assertEqual("shode-house", manifest["name"])
             self.assertEqual(version, manifest["version"], name)
-        # Cursor must not discover the Claude-dialect command; ask stays a skill there.
+        # 4.2.0: no host registers a command; cook is a skill everywhere.
         self.assertEqual([], json.loads(entries[".cursor-plugin/plugin.json"])["commands"])
-        self.assertIn("commands/ask.md", entries)
+        self.assertNotIn("commands", json.loads(entries[".claude-plugin/plugin.json"]))
+        self.assertEqual([], [p for p in entries if p.startswith(("commands/", "knowledge/commands/"))])
 
     # --- verbatim + footer (A7) -----------------------------------------------------------------
     def test_agent_files_are_source_verbatim_plus_footer_with_model_kept(self):
@@ -206,9 +188,9 @@ class TeamCandidateTest(unittest.TestCase):
         preload = preloaded_on_disk()
         for name, (bucket, rel) in source_skills().items():
             source = terminated((ROOT / rel).read_bytes())
-            footer = pack.skill_footer(bucket, name, name not in preload and name != "ask")
+            footer = pack.skill_footer(bucket, name, name not in preload and name != "cook")
             tree = entries[f"skills/{name}/SKILL.md"].decode()
-            if name == "ask":
+            if name == "cook":
                 header, rest = pack.frontmatter(source, rel)
                 self.assertEqual(header + "\n" + block + pack.rewrite(rest, rel) + footer, tree)
             else:
@@ -216,14 +198,14 @@ class TeamCandidateTest(unittest.TestCase):
             self.assertTrue((ROOT / "skills" / bucket / name).is_dir())   # the footer's directory exists
             self.assertIn(f"knowledge/skills/{bucket}/{name}/ directory.", footer)
 
-    def test_commands_are_source_verbatim_plus_footer_except_the_ask_wrapper(self):
+    def test_workflow_references_are_source_verbatim_knowledge_copies_and_no_command_ships(self):
         _, entries = pack.unified_payload()
-        for path in sorted((ROOT / "commands").glob("*.md")):
-            rel = "commands/" + path.name
-            if rel == "commands/ask.md":
-                continue
-            self.assertEqual(pack.rewrite(terminated(path.read_bytes()), rel) + pack.COMMAND_FOOTER,
-                             entries[rel].decode(), rel)
+        workflows = sorted((ROOT / "references/workflows").glob("*.md"))
+        self.assertEqual(["consult", "implement", "init", "review", "spec"], [p.stem for p in workflows])
+        for path in workflows:
+            self.assertEqual(path.read_bytes(), entries["knowledge/references/workflows/" + path.name], path.name)
+        self.assertFalse((ROOT / "commands").exists())
+        self.assertEqual([], [p for p in entries if p.startswith("commands/")])
 
     def test_packer_output_satisfies_the_packaging_contract(self):
         _, entries = pack.unified_payload()
@@ -257,47 +239,34 @@ class TeamCandidateTest(unittest.TestCase):
             self.assertNotIn("mcpServers", manifest)
         self.assertNotIn("mcpServers", codex)
 
-    def test_command_sources_preserved_and_every_command_registered(self):
-        # Was: "...not publicly registered" -- the tree registered /ask only while the
-        # repo root (and the zip) registered all six by default scan. The authored
-        # sources stay under knowledge/; the verbatim copies are what the host scans.
+    def test_no_command_is_registered_and_the_workflow_sources_stay_under_knowledge(self):
+        # 4.2.0: `cook` (a skill) is the single entry; the five former commands are workflow references that only
+        # cook's router selects, preserved verbatim under knowledge/ and registered nowhere.
         _, entries = pack.payload()
-        authored = sorted(path.name for path in (ROOT / "commands").glob("*.md"))
-        for path in (ROOT / "commands").glob("*.md"):
-            self.assertEqual(path.read_bytes(), entries["knowledge/commands/" + path.name])
-        self.assertEqual(["./commands/" + name for name in authored],
-                         json.loads(entries[".claude-plugin/plugin.json"])["commands"])
-
-    def test_command_adapters_pass_the_user_argument_through(self):
-        # `$ARGUMENTS` is substituted in the invoked file only, never in a file it links
-        # to, so a registered command whose source takes an argument must carry it itself.
-        _, entries = pack.unified_payload()
-        for path in sorted(p for p in entries if p.startswith("commands/")):
-            source = (ROOT / path).read_text()   # the authored command, e.g. commands/review.md
-            header = source.split("---", 2)[1]
-            if "$ARGUMENTS" not in source and not re.search(r"^argument-hint:", header, re.M):
-                continue
-            self.assertIn("$ARGUMENTS", entries[path].decode(), path)
-            shipped = ROOT / "plugins/shode-house" / path
-            self.assertIn("$ARGUMENTS", shipped.read_text(), str(shipped))
+        for path in (ROOT / "references/workflows").glob("*.md"):
+            self.assertEqual(path.read_bytes(), entries["knowledge/references/workflows/" + path.name])
+        self.assertNotIn("commands", json.loads(entries[".claude-plugin/plugin.json"]))
+        self.assertEqual([], [p for p in entries if p.startswith(("commands/", "knowledge/commands/"))])
 
     def test_publishing_a_command_stays_an_explicit_decision(self):
-        # The registered set is derived from commands/*.md, so without this a new command
-        # file would be published with nothing objecting. PUBLISHED_COMMANDS is the gate;
-        # the packer refuses a mismatch, and this pins the allowlist to what ships.
+        # The registered set is derived from commands/*.md, so without this a new command file would be published
+        # with nothing objecting. PUBLISHED_COMMANDS is the gate (empty since 4.2.0); the packer refuses a mismatch.
         _, entries = pack.unified_payload()
-        self.assertEqual(sorted(pack.PUBLISHED_COMMANDS),
-                         sorted(Path(p).stem for p in entries if p.startswith("commands/")))
-        self.assertEqual(sorted(pack.PUBLISHED_COMMANDS),
-                         sorted(path.stem for path in (ROOT / "commands").glob("*.md")))
+        self.assertEqual((), pack.PUBLISHED_COMMANDS)
+        self.assertEqual([], sorted(Path(p).stem for p in entries if p.startswith("commands/")))
+        self.assertFalse((ROOT / "commands").exists())
+        manifest, source = pack.collect()
+        mutated = dict(source, **{"commands/new.md": b"---\ndescription: x\n---\nbody\n"})
+        with mock.patch.object(pack, "collect", return_value=(manifest, mutated)):
+            with self.assertRaisesRegex(ValueError, "authored commands differ from PUBLISHED_COMMANDS"):
+                pack.payload()
 
-    def test_versions_agree_and_every_authored_command_ships(self):
+    def test_versions_agree_and_no_command_ships(self):
         version, entries = pack.payload()
         for name in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json"):
             self.assertEqual(version, json.loads(entries[name])["version"])
-        self.assertEqual(sorted("commands/" + path.name for path in (ROOT / "commands").glob("*.md")),
-                         sorted(p for p in entries if p.startswith("commands/")))
-        self.assertIn("skills/ask/SKILL.md", entries)
+        self.assertEqual([], [p for p in entries if p.startswith("commands/")])
+        self.assertIn("skills/cook/SKILL.md", entries)
         skills = [p for p in entries if p.startswith("skills/") and p.endswith("/SKILL.md")]
         self.assertEqual(20, len(skills))
         self.assertTrue(all(len(Path(p).parts) == 3 for p in skills))
@@ -316,85 +285,67 @@ class TeamCandidateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             pack.roles_and_skills(revived)
 
-    # --- §5.8.1: floor carrier, pointer lines, /ask wrapper -------------------------------------
-    def test_ask_skill_carries_the_style_floor_byte_equal_and_nothing_else_does(self):
+    # --- §5.8.1: floor carrier, pointer lines (4.2.0: no wrapper) -------------------------------------
+    def test_cook_skill_carries_the_style_floor_byte_equal_and_nothing_else_does(self):
         _, entries = pack.unified_payload()
         style = (ROOT / pack.FLOOR_STYLE).read_text()
         begin, end = pack.STYLE_FLOOR
         block = style[style.index(begin):style.index(end) + len(end) + 1]
-        ask = entries[pack.ASK_SKILL].decode()
-        self.assertEqual(1, ask.count(begin))
+        cook = entries[pack.ENTRY_SKILL].decode()
+        self.assertEqual(1, cook.count(begin))
         # directly after the frontmatter's closing line, separated by one blank line (§5.8.1 item 2)
-        self.assertEqual("\n\n" + block, ask.split("---", 2)[2][:2 + len(block)])
-        self.assertTrue(pack.AUTHORITY_ASK.rstrip("\n") in ask)
-        self.assertNotIn(begin, (ROOT / "skills/workflow/ask/SKILL.md").read_text())   # source stays clean
+        self.assertEqual("\n\n" + block, cook.split("---", 2)[2][:2 + len(block)])
+        self.assertTrue(pack.AUTHORITY_ENTRY.rstrip("\n") in cook)
+        self.assertNotIn(begin, (ROOT / "skills/workflow/cook/SKILL.md").read_text())   # source stays clean
         for path, body in entries.items():
             if path.startswith(("skills/", "knowledge/skills/", "commands/", "knowledge/commands/",
-                                "knowledge/references/")) and path != pack.ASK_SKILL:
+                                "knowledge/references/")) and path != pack.ENTRY_SKILL:
                 self.assertNotIn(b"<!-- floor:", body, path)
 
-    def test_no_role_preloads_ask(self):
-        self.assertNotIn("ask", preloaded_on_disk())
+    def test_no_role_preloads_cook(self):
+        self.assertNotIn("cook", preloaded_on_disk())
 
     def test_pointer_line_sits_in_exactly_the_derived_set(self):
         # Derived from agents/*.md `skills:` lines -- NOT the literal 15: it is 14 while orchestrator
         # still preloads shode-house-workflow (Sentinel R2-1); W10 pins 15 in the switch commit.
         _, entries = pack.unified_payload()
         names = set(source_skills())
-        derived = names - preloaded_on_disk() - {"ask"}
+        derived = names - preloaded_on_disk() - {"cook"}
         self.assertEqual(20 - len(preloaded_on_disk() & names) - 1, len(derived))
         carrying = {Path(p).parent.name for p, body in entries.items()
                     if p.startswith("skills/") and p.endswith("/SKILL.md") and pack.POINTER.encode() in body}
         self.assertEqual(derived, carrying)
-        self.assertEqual(117, len(pack.POINTER.encode()))
+        self.assertEqual(118, len(pack.POINTER.encode()))
         for name in derived:   # placed after the authority line, last line of the file
             self.assertTrue(entries[f"skills/{name}/SKILL.md"].decode().endswith(pack.AUTHORITY + pack.POINTER))
 
-    def test_pointer_line_ends_every_published_command_except_the_ask_wrapper(self):
-        # Sentinel W2 S1: Antigravity converts commands/*.md to skills, which would otherwise carry neither
-        # the floor nor the pointer. `/ask` is the entry itself and stays the pinned wrapper.
+    def test_cook_is_a_skill_not_a_command_wrapper_or_adapter(self):
+        # 4.2.0: the single entry is the skill itself; there is no commands/ wrapper that points at it, and no tree
+        # path is named ask (the retired entry, tombstoned).
         _, entries = pack.unified_payload()
-        for name in pack.PUBLISHED_COMMANDS:
-            body = entries[f"commands/{name}.md"].decode()
-            if name == "ask":
-                self.assertNotIn(pack.POINTER, body)
-            else:
-                self.assertTrue(body.endswith(pack.RESOLVE + pack.POINTER), name)
-                self.assertEqual(1, body.count(pack.POINTER), name)
-
-    def test_ask_wrapper_is_pinned_and_resolves_to_the_tree_ask_skill(self):
-        _, entries = pack.unified_payload()
-        wrapper = entries["commands/ask.md"]
-        self.assertEqual(ASK_WRAPPER_PIN, hashlib.sha256(wrapper).hexdigest())
-        # UD R52 (Bella S2 M-1): keyed on a working delegation tool, never on a style the session may lack;
-        # UD R56: and on the ask skill not reporting team execution unavailable.
-        self.assertIn(ASK_DELEGATE.encode(), wrapper)
-        self.assertIn(b"otherwise report team execution BLOCKED instead of role-playing the team.", wrapper)
-        self.assertNotIn(b"style", wrapper)
-        self.assertIn(b"${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md", wrapper)
-        self.assertNotIn(b"knowledge/", wrapper)
-        self.assertNotIn(b"Oliver", wrapper)                                  # persona-free (A6)
-        self.assertNotIn(pack.POINTER.encode(), wrapper)                      # the wrapper IS the entry
-        self.assertIn("skills/ask/SKILL.md", entries)
-        self.assertIn(pack.STYLE_FLOOR[0].encode(), entries["skills/ask/SKILL.md"])   # it reaches the carrier
+        self.assertEqual([], [p for p in entries if p.startswith("commands/")])
+        self.assertEqual([], [p for p in entries if "ask" in p.split("/") or Path(p).stem == "ask"])  # tombstone-allow
+        self.assertIn("skills/cook/SKILL.md", entries)
+        self.assertIn(pack.STYLE_FLOOR[0].encode(), entries["skills/cook/SKILL.md"])   # the floor carrier is the entry
+        self.assertNotIn(pack.POINTER.encode(), entries["skills/cook/SKILL.md"])        # the entry needs no pointer to itself
 
     # --- S2I-1 / UD R53: relative references ----------------------------------------------------------
     def test_relative_references_resolve_inside_the_tree(self):
         _, entries = pack.unified_payload()
         self.assertEqual([], pack._reference_problems(entries))
-        ask = entries[pack.ASK_SKILL].decode()
+        cook = entries[pack.ENTRY_SKILL].decode()
         for ref in ("../../knowledge/skills/discipline/shode-house-discipline/SKILL.md",
                     "../../knowledge/skills/discipline/shode-house-workflow/harness.md"):
-            self.assertIn("`" + ref + "`", ask)                         # the main session's first reads
-            self.assertIn(posixpath.normpath(posixpath.join("skills/ask", ref)), entries)
-        self.assertNotIn("`../../discipline/", ask)
+            self.assertIn("`" + ref + "`", cook)                        # the main session's first reads
+            self.assertIn(posixpath.normpath(posixpath.join("skills/cook", ref)), entries)
+        self.assertNotIn("`../../discipline/", cook)
         routing = entries["skills/shode-house-routing/SKILL.md"].decode()
         self.assertIn("](../../knowledge/skills/discipline/shode-house-discipline/handoff.md)", routing)
         self.assertNotIn("`../shode-house-discipline/", routing)
         self.assertNotIn("](../shode-house-discipline/", routing)
         # the knowledge/ copy stays the authored bytes (its references resolve in the source layout)
-        self.assertEqual((ROOT / "skills/workflow/ask/SKILL.md").read_bytes(),
-                         entries["knowledge/skills/workflow/ask/SKILL.md"])
+        self.assertEqual((ROOT / "skills/workflow/cook/SKILL.md").read_bytes(),
+                         entries["knowledge/skills/workflow/cook/SKILL.md"])
 
     def test_relocation_rule(self):
         agent, skill = "agents/build.md", "skills/discipline/shode-house-routing/SKILL.md"
@@ -405,7 +356,7 @@ class TeamCandidateTest(unittest.TestCase):
                          pack.relocate("[h](../shode-house-discipline/handoff.md)", skill))
         self.assertEqual("`../../knowledge/skills/discipline/shode-house-routing/ownership.md`",
                          pack.relocate("`./ownership.md`", skill))
-        self.assertEqual("`../../knowledge/agents/`", pack.relocate("`../../../agents/`", "skills/workflow/ask/SKILL.md"))
+        self.assertEqual("`../../knowledge/agents/`", pack.relocate("`../../../agents/`", "skills/workflow/cook/SKILL.md"))
         for kept in ("```bash\ncd ../$(PROJECT) && cat ./.gitignore ../a.md\n```\n",   # fenced: project text
                      "`../../../../x.md`",                                           # leaves the source root
                      "a/../b.md, ${X}/./c.md, ~/./d.md, ../ and ../$(PROJECT)"):     # not a reference start
@@ -478,7 +429,7 @@ class TeamCandidateTest(unittest.TestCase):
     def test_relative_reference_in_an_agent_or_command_source_is_refused_with_source_line(self):
         # S21-3: an agent system prompt / command body has no file location; `../x` would resolve from the project.
         _, source = pack.collect()
-        for name in ("agents/secure.md", "commands/review.md"):
+        for name in ("agents/secure.md", "agents/verify.md"):
             body = terminated(source[name])
             line = body.count("\n") + 1
             # S23-1: a dotfile reference (`./.env`, `../.claude/...`) is a reference too
@@ -557,7 +508,7 @@ class TeamCandidateTest(unittest.TestCase):
                 ("_../.claude/settings.json_", "../.claude/settings.json"), ("../ไทย.md", "../ไทย.md"),
                 ("../@x", "../@x"), ("./~x", "./~x"), ("./-x.md", "./-x.md"),
                 ("~~../.ssh/id_rsa~~", "../.ssh/id_rsa~~"), ("~../.env~", "../.env~"))   # S23-11
-        for name, rule in (("agents/build.md", pack.LOCATION_FREE_RULE), ("commands/review.md",
+        for name, rule in (("agents/build.md", pack.LOCATION_FREE_RULE), ("agents/verify.md",
                            pack.LOCATION_FREE_RULE), ("skills/ops/slo/SKILL.md", "names no shipped file")):
             body = terminated(source[name])
             line = body.count("\n") + 1
@@ -580,8 +531,8 @@ class TeamCandidateTest(unittest.TestCase):
         _, source = pack.collect()
         paths = ("references/../../../../.ssh/id_rsa", "${CLAUDE_PLUGIN_ROOT}/../../.ssh/id_rsa",
                  "$CLAUDE_PLUGIN_ROOT/../x", "skills/../../../x", "knowledge/references//../../x",
-                 "agents/../commands/review.md", "output-styles/../../x")
-        for name in ("agents/build.md", "commands/review.md", "skills/ops/slo/SKILL.md"):
+                 "agents/../references/workflows/review.md", "output-styles/../../x")
+        for name in ("agents/build.md", "agents/verify.md", "skills/ops/slo/SKILL.md"):
             body = terminated(source[name])
             line = body.count("\n") + 1
             for path in paths:
@@ -605,7 +556,7 @@ class TeamCandidateTest(unittest.TestCase):
     def test_unclosed_fence_in_a_source_is_refused_at_the_source_line(self):
         # S21-2 (Sentinel mutant U): an unclosed fence before an escaping reference built and checked green.
         _, source = pack.collect()
-        name = "skills/workflow/ask/SKILL.md"
+        name = "skills/workflow/cook/SKILL.md"
         body = terminated(source[name])
         header, rest = pack.frontmatter(body, name)
         line = header.count("\n") + 2
@@ -620,10 +571,10 @@ class TeamCandidateTest(unittest.TestCase):
     def test_host_notes_state_codex_adapter_and_the_corrected_antigravity_line(self):
         _, entries = pack.unified_payload()
         notes = entries["HOST-NOTES.md"].decode()
-        self.assertIn("Codex: the `ask` skill coordinates genuine separate workers", notes)
+        self.assertIn("Codex: the `cook` skill coordinates genuine separate workers", notes)
         self.assertIn("scope isolation stay ADVISORY-ONLY", notes)
         self.assertIn("Cursor: skills run in one session", notes)
-        self.assertIn("the safety floor is in the `ask` skill", notes)
+        self.assertIn("the safety floor is in the `cook` skill", notes)
         self.assertIn("host's own command approval and sandbox", notes)
         self.assertIn("Antigravity uses the separate `plugins/shode-house-antigravity` host artifact", notes)
         self.assertNotIn(pack.STALE_HOST_CLAIM, notes)
@@ -645,7 +596,7 @@ class TeamCandidateTest(unittest.TestCase):
         self.assertEqual("The full software-house expert team", interface["shortDescription"])
         self.assertEqual(["Work with the Shode House team on this project."], interface["defaultPrompt"])
         for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".cursor-plugin/plugin.json",
-                     "HOST-NOTES.md", "commands/ask.md"):
+                     "HOST-NOTES.md", "skills/cook/SKILL.md"):
             self.assertNotIn(b"Oliver", entries[name], name)
 
     # --- F-4 rewrite and X11 ------------------------------------------------------------------------
@@ -654,14 +605,14 @@ class TeamCandidateTest(unittest.TestCase):
                  "<!-- floor:end -->\n")
         style = "<!-- floor:style:begin -->\n- `${CLAUDE_PLUGIN_ROOT}/skills/workflow/x/SKILL.md`\n<!-- floor:style:end -->\n"
         tail = ("\nread `${CLAUDE_PLUGIN_ROOT}/references/b.md`, then `${CLAUDE_PLUGIN_ROOT}/skills/ops/drain/"
-                "execution.md` and `${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md`\n")
+                "execution.md` and `${CLAUDE_PLUGIN_ROOT}/skills/cook/SKILL.md`\n")
         for block in (floor, style):   # one floor per file, first after the frontmatter (floor.py, R44)
             text = "---\nname: x\n---\n\n" + block + tail
             out = pack.rewrite(text)
             self.assertIn(block, out)                                # floor bytes untouched
             self.assertIn("`${CLAUDE_PLUGIN_ROOT}/knowledge/references/b.md`", out)
             self.assertIn("`${CLAUDE_PLUGIN_ROOT}/knowledge/skills/ops/drain/execution.md`", out)
-            self.assertIn("`${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md`", out)   # exists at the tree root: kept
+            self.assertIn("`${CLAUDE_PLUGIN_ROOT}/skills/cook/SKILL.md`", out)   # exists at the tree root: kept
             self.assertEqual([s for f, s in pack.segments(text) if f], [s for f, s in pack.segments(out) if f])
         with self.assertRaises(ValueError):                          # malformed floor: never guessed
             pack.rewrite("a\n<!-- floor:begin -->\nb\n")
@@ -694,19 +645,19 @@ class TeamCandidateTest(unittest.TestCase):
     def test_every_root_file_needs_frontmatter(self):
         # Chris W2 S-7: the 3.17 packer refused a role or skill without frontmatter; so does generate().
         _, source = pack.collect()
-        for name in ("skills/ops/slo/SKILL.md", "agents/build.md", "commands/review.md"):
+        for name in ("skills/ops/slo/SKILL.md", "agents/build.md"):
             with self.assertRaises(ValueError) as caught:
                 pack.generate(name, b"no frontmatter here\n", source, set())
             self.assertIn(f"missing frontmatter: {name}", str(caught.exception))
 
     def test_preloads_are_read_fail_closed(self):
         # Sentinel W2 S2: only the JSON-style quoted single-line list is understood; valid-YAML forms the host
-        # would also preload (`[ask, x]`, a block list) are refused instead of silently read as "no ask".
+        # would also preload (`[cook, x]`, a block list) are refused instead of silently read as "no cook".
         _, source = pack.collect()
         self.assertEqual(preloaded_on_disk(), pack.preloaded(source))   # the packer agrees with json.loads
         quoted = 'skills: ["shode-house:shode-house-discipline"'   # v4 W5b: preloads are namespaced
         self.assertIn(quoted.encode(), source["agents/build.md"])
-        for bad in ('skills: [ask, shode-house-discipline', 'skills:\n  - ask\n  - "shode-house-discipline"\n#'):
+        for bad in ('skills: [cook, shode-house-discipline', 'skills:\n  - cook\n  - "shode-house-discipline"\n#'):
             trial = dict(source)
             trial["agents/build.md"] = source["agents/build.md"].replace(quoted.encode(), bad.encode(), 1)
             with self.assertRaises(ValueError) as caught:
@@ -719,22 +670,22 @@ class TeamCandidateTest(unittest.TestCase):
         resolve = ("Resolve source-root paths beginning agents/, skills/, references/, commands/ or output-styles/ "
                    "under this plugin's knowledge/ directory, not the user's project.\n")
         pointer = ("No shode-house safety floor in this context (a main session without the router style)? "
-                   "Load `shode-house:ask` first.\n")
+                   "Load `shode-house:cook` first.\n")
         self.assertEqual(resolve, pack.RESOLVE)
         self.assertEqual("Use actual host tools and preserve host/project/user authority.\n", pack.AUTHORITY)
         self.assertEqual("Use actual host tools and preserve host/project/user authority, except R0 and the rest "
-                         "of the safety floor above.\n", pack.AUTHORITY_ASK)
+                         "of the safety floor above.\n", pack.AUTHORITY_ENTRY)
         self.assertEqual(pointer, pack.POINTER)
         self.assertEqual("\n" + resolve, pack.AGENT_FOOTER)
-        self.assertEqual("\n" + resolve + pointer, pack.COMMAND_FOOTER)
+        self.assertFalse(hasattr(pack, "COMMAND_FOOTER"))   # 4.2.0: no commands, no command footer
         # R53 (v7u.4.21): `./`/`../` paths are relocated in the body, so the footer sends only bare names to the
         # bucket directory (reading `../../knowledge/...` from there would break it again).
         relative = ("Resolve paths beginning ./ or ../ from this file's own directory; resolve other relative "
                     "file names in this skill under this plugin's ")
         self.assertEqual("\n" + resolve + relative + "knowledge/skills/ops/slo/ directory.\n" + pack.AUTHORITY + pointer,
                          pack.skill_footer("ops", "slo", True))
-        self.assertEqual("\n" + resolve + relative + "knowledge/skills/workflow/ask/ directory.\n" + pack.AUTHORITY_ASK,
-                         pack.skill_footer("workflow", "ask", False))
+        self.assertEqual("\n" + resolve + relative + "knowledge/skills/workflow/cook/ directory.\n" + pack.AUTHORITY_ENTRY,
+                         pack.skill_footer("workflow", "cook", False))
 
     def test_executor_path_is_rewritten_root_anchored_to_an_existing_tree_file(self):
         # X11 (addendum 1 §5.5.3): the generated executor line names the knowledge/ copy, quoted and
@@ -798,12 +749,14 @@ class TeamCandidateTest(unittest.TestCase):
 
     def test_active_registration_entries_agree_in_root_tree_and_zip(self):
         # Per-DIRECTORY, per-ENTRY: a shape that keeps the directory but drops entries
-        # (the marketplace tree registered 1 of 6 commands) must fail here.
+        # (the marketplace tree once registered 1 of 6 commands) must fail here.
         version, entries = pack.unified_payload()
         source = registration_entries(source_paths())
         self.assertTrue(all(source[name] for name in REGISTRATION_DIRS), source)
         self.assertEqual(source, registration_entries(entries), "generated tree (packer output)")
         self.assertEqual(source, registration_entries(tree_paths()), "generated tree (on disk)")
+        for shape, paths in (("source", source_paths()), ("tree", tree_paths()), ("zip", packed_paths())):
+            self.assertEqual([], [p for p in paths if p.startswith("commands/")], f"{shape}: a command is registered")
         self.assertEqual(source, registration_entries(packed_paths()), "make pack zip")
         archive = ROOT / f"shode-house-v{version}.plugin"
         if archive.is_file():  # cross-check the real artifact when one was already built
@@ -860,7 +813,7 @@ class PackagingContractMutationTest(unittest.TestCase):
         self.red(entries, "agents/verify.md: ")
 
     def test_missing_footer_is_red(self):
-        self.red(self.edit("commands/review.md", pack.COMMAND_FOOTER, "\n"), "commands/review.md: does not end")
+        self.red(self.edit("agents/verify.md", pack.AGENT_FOOTER, "\n"), "agents/verify.md: does not end")
 
     def test_changed_body_text_is_red(self):
         text = self.entries["skills/dev-gate/SKILL.md"].decode()
@@ -912,57 +865,56 @@ class PackagingContractMutationTest(unittest.TestCase):
 
     def test_ask_without_or_with_a_changed_block_is_red(self):
         block = pack.style_floor_block(self.source)
-        self.red(self.edit(pack.ASK_SKILL, block, ""), "style floor block is not directly after")
-        self.red(self.edit(pack.ASK_SKILL, block, block.replace("floor:style:end", "floor:style:end ")),
-                 pack.ASK_SKILL)
+        self.red(self.edit(pack.ENTRY_SKILL, block, ""), "style floor block is not directly after")
+        self.red(self.edit(pack.ENTRY_SKILL, block, block.replace("floor:style:end", "floor:style:end ")),
+                 pack.ENTRY_SKILL)
 
     def test_ask_authority_line_without_the_floor_exception_is_red(self):
-        self.red(self.edit(pack.ASK_SKILL, pack.AUTHORITY_ASK, pack.AUTHORITY), "does not end with its generated")
+        self.red(self.edit(pack.ENTRY_SKILL, pack.AUTHORITY_ENTRY, pack.AUTHORITY), "does not end with its generated")
 
     def test_pointer_line_in_a_preloaded_skill_or_missing_from_a_derived_one_is_red(self):
         preloaded = sorted(self.preload & {Path(p).parent.name for p in self.entries if p.startswith("skills/")})[0]
         path = f"skills/{preloaded}/SKILL.md"
         self.red(self.edit(path, pack.AUTHORITY, pack.AUTHORITY + pack.POINTER), f"{path}: pointer line present")
         self.red(self.edit("skills/diagnose/SKILL.md", pack.POINTER, ""), "skills/diagnose/SKILL.md: pointer line missing")
-        self.red(self.edit(pack.ASK_SKILL, pack.AUTHORITY_ASK, pack.AUTHORITY_ASK + pack.POINTER),
-                 f"{pack.ASK_SKILL}: pointer line present")
+        self.red(self.edit(pack.ENTRY_SKILL, pack.AUTHORITY_ENTRY, pack.AUTHORITY_ENTRY + pack.POINTER),
+                 f"{pack.ENTRY_SKILL}: pointer line present")
 
-    def test_a_role_preloading_ask_is_red(self):
+    def test_a_role_preloading_cook_is_red(self):
         source = dict(self.source)
         source["agents/build.md"] = source["agents/build.md"].replace(
-            b'skills: ["shode-house:shode-house-discipline"', b'skills: ["shode-house:ask", "shode-house:shode-house-discipline"', 1)
+            b'skills: ["shode-house:shode-house-discipline"', b'skills: ["shode-house:cook", "shode-house:shode-house-discipline"', 1)
         self.assertNotEqual(source["agents/build.md"], self.source["agents/build.md"])
-        self.red(self.entries, "a role preloads `ask`", source)
+        self.red(self.entries, "a role preloads `cook`", source)
 
-    def test_ask_wrapper_repointed_to_knowledge_is_red(self):
-        entries = self.edit("commands/ask.md", "${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md",
-                            "${CLAUDE_PLUGIN_ROOT}/knowledge/skills/workflow/ask/SKILL.md")
-        self.red(entries, "commands/ask.md: must resolve to")
-        self.red(self.edit("commands/ask.md", "otherwise report team execution BLOCKED instead of role-playing the team",
-                           "otherwise act as the team"),
-                 "commands/ask.md: the /ask wrapper changed")
-        condition = ASK_DELEGATE
-        for mutant in ("Delegate",                                                  # condition dropped
-                       "If this session has the shode-house router style, delegate",  # keyed on a style (M-1)
-                       "If this session has the Oliver style, delegate",              # a persona style
-                       "If this session has a delegation tool, delegate",             # tool not required working
-                       "If this session has a working delegation tool (Agent or Task), delegate"):  # R56 deferral dropped
-            self.red(self.edit("commands/ask.md", condition, mutant), "commands/ask.md: the /ask wrapper changed")
+    def test_a_command_wrapper_an_ask_path_or_a_manifest_command_is_red(self):
+        # 4.2.0: cook is the single entry. A commands/ file (wrapper, alias or adapter), a tree path named ask
+        # and a manifest `commands` list are each a packaging-contract failure.
+        entries = dict(self.entries)
+        entries["commands/cook.md"] = b"---\ndescription: wrapper\n---\nUse the cook skill.\n"
+        self.red(entries, "commands/cook.md: the tree publishes no commands")
+        entries = dict(self.entries)
+        entries["skills/ask/SKILL.md"] = self.entries[pack.ENTRY_SKILL]
+        self.red(entries, "skills/ask/SKILL.md: a tree path named ask")
+        entries = dict(self.entries)
+        entries["commands/ask.md"] = b"---\ndescription: x\n---\n"  # tombstone-allow
+        self.red(entries, "commands/ask.md: a tree path named ask")  # tombstone-allow
+        manifest = json.loads(self.entries[".claude-plugin/plugin.json"])
+        manifest["commands"] = ["./commands/cook.md"]
+        entries = dict(self.entries)
+        entries[".claude-plugin/plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
+        self.red(entries, ".claude-plugin/plugin.json: a `commands` list")
+        entries = dict(self.entries)
+        del entries[pack.ENTRY_SKILL]
+        self.red(entries, f"{pack.ENTRY_SKILL}: missing from the tree")
 
     def test_style_less_session_requires_genuine_workers_and_never_role_plays(self):
         _, entries = pack.unified_payload()
-        source_skill = (ROOT / "skills/workflow/ask/SKILL.md").read_text()
-        tree_skill = entries["skills/ask/SKILL.md"].decode()
+        source_skill = (ROOT / "skills/workflow/cook/SKILL.md").read_text()
+        tree_skill = entries["skills/cook/SKILL.md"].decode()
         for skill in (source_skill, tree_skill):
-            self.assertEqual(1, skill.count(ASK_CODEX_RULE))
+            self.assertEqual(1, skill.count(ENTRY_CODEX_RULE))
             self.assertIn("ADVISORY-ONLY", skill)
-        wrapper = entries["commands/ask.md"].decode()
-        self.assertEqual(1, wrapper.lower().count("delegate"), "one delegation clause only")
-        before, _, after = wrapper.partition("delegate specialist work")
-        self.assertTrue(before.endswith(ASK_DELEGATE[:-len("delegate")]), "the delegation clause must follow the R56 deferral")
-        self.assertIn("the ask skill does not report team execution unavailable", before)
-        self.assertIn("; otherwise report team execution BLOCKED instead of role-playing the team.", after)
-        self.assertNotIn("delegate", after.split("; otherwise", 1)[1])
 
     def test_stale_host_notes_or_description_is_red(self):
         self.red(self.edit("HOST-NOTES.md", "Antigravity uses the separate",
@@ -978,9 +930,9 @@ class PackagingContractMutationTest(unittest.TestCase):
 
     def test_over_rewritten_plugin_root_path_is_red(self):
         # Chris W2 S-1: the old lossy inverse (knowledge/ -> plugin root) accepted a tree that also moved
-        # paths the tree keeps at its root (skills/ask/, agents/) to knowledge/, where skills/ask/ does not exist.
+        # paths the tree keeps at its root (skills/cook/, agents/) to knowledge/, where skills/cook/ does not exist.
         source = dict(self.source)
-        line = ("See `${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md`, `${CLAUDE_PLUGIN_ROOT}/agents/verify.md` "
+        line = ("See `${CLAUDE_PLUGIN_ROOT}/skills/cook/SKILL.md`, `${CLAUDE_PLUGIN_ROOT}/agents/verify.md` "
                 "and `${CLAUDE_PLUGIN_ROOT}/references/scope-lock.md`.\n")
         source["agents/build.md"] = source["agents/build.md"] + line.encode()
         good = pack.generate("agents/build.md", source["agents/build.md"], source, set())
@@ -988,18 +940,18 @@ class PackagingContractMutationTest(unittest.TestCase):
         entries = dict(self.entries)
         entries["agents/build.md"] = good.encode()
         self.assertEqual([], pack.audit(entries, source))
-        for wrong in ("skills/ask/SKILL.md", "agents/verify.md"):
+        for wrong in ("skills/cook/SKILL.md", "agents/verify.md"):
             entries["agents/build.md"] = good.replace("${CLAUDE_PLUGIN_ROOT}/" + wrong,
                                                           "${CLAUDE_PLUGIN_ROOT}/knowledge/" + wrong).encode()
             self.red(entries, "agents/build.md: rewrites a plugin-root path outside the F-4 set", source)
 
-    def test_source_ask_skill_carrying_the_style_floor_is_red(self):
+    def test_source_cook_skill_carrying_the_style_floor_is_red(self):
         # Chris W2 S-3 (M14): the carrier is the generated tree skill only; a source copy would reach it twice.
         block = pack.style_floor_block(self.source)
         source = dict(self.source)
-        header, rest = pack.frontmatter(source["skills/workflow/ask/SKILL.md"].decode(), "ask")
-        source["skills/workflow/ask/SKILL.md"] = (header + "\n" + block + rest).encode()
-        self.red(self.entries, "skills/workflow/ask/SKILL.md: the source ask skill carries the style floor", source)
+        header, rest = pack.frontmatter(source["skills/workflow/cook/SKILL.md"].decode(), "cook")
+        source["skills/workflow/cook/SKILL.md"] = (header + "\n" + block + rest).encode()
+        self.red(self.entries, "skills/workflow/cook/SKILL.md: the source cook skill carries the style floor", source)
 
     def test_style_source_without_exactly_one_style_pair_is_red(self):
         # Chris W2 S-3 (M10): two pairs (refused by floor.py's grammar) and none both name the style file.
@@ -1012,34 +964,28 @@ class PackagingContractMutationTest(unittest.TestCase):
             source[pack.FLOOR_STYLE] = text.encode()
             self.red(self.entries, needle, source)
 
-    def test_unquoted_or_block_list_preload_of_ask_is_red(self):
-        # Sentinel W2 S2: `skills: [ask, x]` is valid YAML the host preloads; it must not read as "no ask".
-        for bad in (b'skills: [ask, shode-house-discipline', b'skills:\n  - ask\n  - "shode-house-discipline"\n#'):
+    def test_unquoted_or_block_list_preload_of_cook_is_red(self):
+        # Sentinel W2 S2: `skills: [cook, x]` is valid YAML the host preloads; it must not read as "no cook".
+        for bad in (b'skills: [cook, shode-house-discipline', b'skills:\n  - cook\n  - "shode-house-discipline"\n#'):
             source = dict(self.source)
             source["agents/build.md"] = source["agents/build.md"].replace(
                 b'skills: ["shode-house:shode-house-discipline"', bad, 1)   # v4 W5b: preloads are namespaced
             self.assertNotEqual(source["agents/build.md"], self.source["agents/build.md"])
             self.red(self.entries, "agents/build.md: `skills:` must be a JSON-style quoted", source)
 
-    def test_command_without_the_pointer_or_ask_wrapper_with_it_is_red(self):
-        # Sentinel W2 S1.
-        self.red(self.edit("commands/review.md", pack.POINTER, ""), "commands/review.md: pointer line missing")
-        self.red(self.edit("commands/ask.md", "instead of role-playing the team.\n",
-                           "instead of role-playing the team.\n" + pack.POINTER), "commands/ask.md: pointer line present")
-
     @staticmethod
     def line_of(entries, path, needle):
         return next(n for n, line in enumerate(entries[path].decode().splitlines(), 1) if needle in line)
 
     def test_unrelocated_relative_reference_is_red_with_file_and_line(self):
-        # S2I-1 / UD R53: the 3.17-adapter-era text (source path, unresolvable from skills/ask/) must not pass.
+        # S2I-1 / UD R53: the 3.17-adapter-era text (source path, unresolvable from skills/cook/) must not pass.
         stale = "../../discipline/shode-house-discipline/SKILL.md"
-        entries = self.edit(pack.ASK_SKILL, "../../knowledge/skills/discipline/shode-house-discipline/SKILL.md", stale)
+        entries = self.edit(pack.ENTRY_SKILL, "../../knowledge/skills/discipline/shode-house-discipline/SKILL.md", stale)
         problems = pack.audit(entries, self.source)
-        line = self.line_of(entries, pack.ASK_SKILL, stale)
-        self.assertIn(f"{pack.ASK_SKILL}:{line}: relative reference `{stale}` does not resolve inside the tree "
+        line = self.line_of(entries, pack.ENTRY_SKILL, stale)
+        self.assertIn(f"{pack.ENTRY_SKILL}:{line}: relative reference `{stale}` does not resolve inside the tree "
                       "(fence a project path)", problems)
-        self.assertIn(f"{pack.ASK_SKILL}: a ./ or ../ reference is not the source reference relocated to its "
+        self.assertIn(f"{pack.ENTRY_SKILL}: a ./ or ../ reference is not the source reference relocated to its "
                       "knowledge/ copy (R53)", problems)
 
     def test_relocated_reference_to_another_existing_file_is_red(self):
@@ -1067,17 +1013,17 @@ class PackagingContractMutationTest(unittest.TestCase):
 
     def test_unclosed_fence_in_the_tree_is_red_with_file_and_line(self):
         # S21-2 (Sentinel mutant U, tree side): the fence and the escaping reference after it are both reported.
-        entries = self.edit(pack.ASK_SKILL, "../../knowledge/skills/discipline/shode-house-discipline/SKILL.md",
+        entries = self.edit(pack.ENTRY_SKILL, "../../knowledge/skills/discipline/shode-house-discipline/SKILL.md",
                             "../../../discipline/shode-house-discipline/SKILL.md")
         clean = pack._reference_problems(entries)
         self.assertTrue(any("../../../discipline/" in p for p in clean), clean)
-        lines = entries[pack.ASK_SKILL].decode().splitlines(keepends=True)
-        line = self.line_of(entries, pack.ASK_SKILL, "../../../discipline/")    # the fence opens on this line
+        lines = entries[pack.ENTRY_SKILL].decode().splitlines(keepends=True)
+        line = self.line_of(entries, pack.ENTRY_SKILL, "../../../discipline/")    # the fence opens on this line
         lines.insert(line - 1, "```text-s21\n")
-        entries[pack.ASK_SKILL] = "".join(lines).encode()
+        entries[pack.ENTRY_SKILL] = "".join(lines).encode()
         problems = pack._reference_problems(entries)
-        self.assertIn(f"{pack.ASK_SKILL}:{line}: {pack.UNCLOSED}", problems)
-        self.red(entries, f"{pack.ASK_SKILL}:{line}: code fence never closed")
+        self.assertIn(f"{pack.ENTRY_SKILL}:{line}: {pack.UNCLOSED}", problems)
+        self.red(entries, f"{pack.ENTRY_SKILL}:{line}: code fence never closed")
         # a knowledge/ file is checked too, and a shorter or other-character closer does not close
         path = "knowledge/skills/discipline/shode-house-routing/SKILL.md"
         for opener in ("````md\n```\n", "~~~\n```\n"):
@@ -1089,12 +1035,12 @@ class PackagingContractMutationTest(unittest.TestCase):
         # S21-3 (Sentinel mutant): `../knowledge/agents/build.md` resolves from agents/, but an agent system
         # prompt or a command body has no file location, so the host would resolve it from the project.
         for path, ref in (("agents/secure.md", "../knowledge/agents/build.md"),
-                          ("commands/review.md", "../knowledge/references/runbooks/")):
-            footer = pack.AGENT_FOOTER if path.startswith("agents/") else pack.COMMAND_FOOTER
+                          ("agents/verify.md", "../knowledge/references/runbooks/")):
+            footer = pack.AGENT_FOOTER
             entries = self.edit(path, footer, f"\nRead `{ref}`.\n" + footer)
             line = self.line_of(entries, path, ref)
             self.red(entries, f"{path}:{line}: relative reference `{ref}` {pack.LOCATION_FREE_RULE}")
-        fenced = self.edit("commands/review.md", pack.COMMAND_FOOTER, "\n```bash\n./mvnw test\n```\n" + pack.COMMAND_FOOTER)
+        fenced = self.edit("agents/verify.md", pack.AGENT_FOOTER, "\n```bash\n./mvnw test\n```\n" + pack.AGENT_FOOTER)
         self.assertEqual([], pack._reference_problems(fenced))
         # the knowledge/ copy is read as a file, so a resolving reference there is fine
         knowledge = self.edit("knowledge/agents/secure.md", "\n## ", "\nsee ./build.md\n## ")
@@ -1103,9 +1049,9 @@ class PackagingContractMutationTest(unittest.TestCase):
     def test_dotfile_reference_in_the_tree_is_red(self):
         # S23-1 (Sentinel e2e): `./.env` in an agent or command, and an escaping `.ssh` reference in a skill or a
         # knowledge/ copy, passed --tree and --check.
-        for path, ref in (("agents/build.md", "./.env"), ("commands/review.md", "./.env"),
+        for path, ref in (("agents/build.md", "./.env"), ("agents/verify.md", "./.env"),
                           ("agents/build.md", "../.claude/settings.json")):
-            footer = pack.AGENT_FOOTER if path.startswith("agents/") else pack.COMMAND_FOOTER
+            footer = pack.AGENT_FOOTER
             entries = self.edit(path, footer, f"\nRead {ref} first.\n" + footer)
             self.red(entries, f"{path}:{self.line_of(entries, path, ref)}: relative reference `{ref}` "
                               f"{pack.LOCATION_FREE_RULE}")
@@ -1134,8 +1080,8 @@ class PackagingContractMutationTest(unittest.TestCase):
 
     def append(self, path, added):
         """`added` as the last authored line of tree file `path` (before a generated footer) -> (entries, line)."""
-        footer = next((f for f in (pack.AGENT_FOOTER, pack.COMMAND_FOOTER) if path.split("/")[0] in ("agents",
-                       "commands") and self.entries[path].decode().endswith(f)), None)
+        footer = next((f for f in (pack.AGENT_FOOTER,) if path.split("/")[0] == "agents"
+                       and self.entries[path].decode().endswith(f)), None)
         if footer is not None:
             entries = self.edit(path, footer, "\n" + added + footer)
         elif path.startswith("skills/"):
@@ -1153,7 +1099,7 @@ class PackagingContractMutationTest(unittest.TestCase):
                  "..//agents/build.md"), ("../ไทย.md", "../ไทย.md"), ("../@x", "../@x"), ("./~x", "./~x"),
                  ("./-x.md", "./-x.md"), ("~~../.ssh/id_rsa~~", "../.ssh/id_rsa~~"), ("~../.env~", "../.env~"),
                  ("~~..//agents/build.md~~", "..//agents/build.md~~"))   # S23-11 (Sentinel r3 e2e)
-        for path in ("agents/build.md", "commands/review.md", "output-styles/shode-house.md"):
+        for path in ("agents/build.md", "agents/verify.md", "output-styles/shode-house.md"):
             for written, ref in cases:
                 entries, line = self.append(path, f"Read {written} before routing.\n")
                 self.red(entries, f"{path}:{line}: relative reference `{ref}` {pack.LOCATION_FREE_RULE}")
@@ -1169,7 +1115,7 @@ class PackagingContractMutationTest(unittest.TestCase):
         # S23-9: an agent, command, skill root, style and a knowledge/ reference document, in prose or fenced code.
         paths = ("references/../../../../.ssh/id_rsa", "${CLAUDE_PLUGIN_ROOT}/../../.ssh/id_rsa",
                  "${CLAUDE_PLUGIN_ROOT}/knowledge/references/../../../x", "knowledge/skills/../../x")
-        for path in ("agents/build.md", "commands/review.md", "skills/slo/SKILL.md", "output-styles/shode-house.md",
+        for path in ("agents/build.md", "agents/verify.md", "skills/slo/SKILL.md", "output-styles/shode-house.md",
                      "knowledge/references/runbooks/resolve-merge-conflicts.md"):
             for climbing in paths:
                 for added in (f"Read `{climbing}` first.\n", f"```bash\ncat \"{climbing}\"\n```\n"):
@@ -1180,10 +1126,10 @@ class PackagingContractMutationTest(unittest.TestCase):
     def test_damaged_tree_frontmatter_is_reported_not_raised(self):
         # Chris W2 S-5: one damaged file is a problem line; the other problems are still reported.
         entries = self.edit("agents/build.md", "---\n", "--- \n")
-        entries = self.edit("commands/review.md", pack.COMMAND_FOOTER, "\n", entries)
+        entries = self.edit("agents/verify.md", pack.AGENT_FOOTER, "\n", entries)
         problems = pack.audit(entries, self.source)
         self.assertTrue(any(p.startswith("agents/build.md: ") for p in problems), problems)
-        self.assertTrue(any(p.startswith("commands/review.md: does not end") for p in problems), problems)
+        self.assertTrue(any(p.startswith("agents/verify.md: does not end") for p in problems), problems)
 
 
 def tree_snapshot(folder):
@@ -1193,7 +1139,7 @@ def tree_snapshot(folder):
 
 def source_copy(root):
     """A copied source root (the packer's inputs and the packer itself) under `root`; -> its packer script."""
-    for name in ("agents", "references", "output-styles", "commands", "skills", ".claude-plugin"):
+    for name in ("agents", "references", "output-styles", "skills", ".claude-plugin"):
         shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / "release/hosts/codex/hooks", root / "release/hosts/codex/hooks")
     (root / "scripts").mkdir()
@@ -1228,12 +1174,12 @@ class CheckCommandLineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="shode-pack-cli-") as tmp:
             tree = Path(tmp) / "tree"
             pack.write_tree(tree)
-            target = tree / "commands/review.md"
+            target = tree / "agents/verify.md"
             target.write_bytes(target.read_bytes() + b" ")
             result = self.run_cli("--check", tree)
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
-        self.assertIn("drift: commands/review.md\n", result.stdout)
-        self.assertIn("contract: commands/review.md: does not end with its generated footer", result.stdout)
+        self.assertIn("drift: agents/verify.md\n", result.stdout)
+        self.assertIn("contract: agents/verify.md: does not end with its generated footer", result.stdout)
         self.assertNotIn("Traceback", result.stderr)
 
     def test_unresolved_relative_reference_exits_1_with_file_and_line(self):
@@ -1325,7 +1271,7 @@ class CheckCommandLineTest(unittest.TestCase):
         # --check rc=0; now neither builds, and nothing is written.
         mutants = (("agents/build.md", "Read ./.env and ../.claude/settings.json first.\n",
                     "agents/build.md:{line}: relative reference `./.env` "),
-                   ("commands/review.md", "Read ./.env first.\n", "commands/review.md:{line}: relative reference "
+                   ("agents/verify.md", "Read ./.env first.\n", "agents/verify.md:{line}: relative reference "
                                                                   "`./.env` "),
                    ("skills/ops/slo/SKILL.md", "Read ../../../../../.ssh/id_rsa before acting.\n",
                     "skills/ops/slo/SKILL.md:{line}: relative reference `../../../../../.ssh/id_rsa` names no "
@@ -1336,8 +1282,8 @@ class CheckCommandLineTest(unittest.TestCase):
                    # S23-7 (Sentinel r2 scratchpad/s23b/e2e, verbatim): doubled separators and `_` emphasis
                    ("agents/build.md", "Read ..//.ssh/id_rsa and .//.env first.\n",
                     "agents/build.md:{line}: relative reference `..//.ssh/id_rsa` " + pack.LOCATION_FREE_RULE),
-                   ("commands/review.md", "See _../.claude/settings.json_ before routing.\n",
-                    "commands/review.md:{line}: relative reference `../.claude/settings.json` "
+                   ("agents/verify.md", "See _../.claude/settings.json_ before routing.\n",
+                    "agents/verify.md:{line}: relative reference `../.claude/settings.json` "
                     + pack.LOCATION_FREE_RULE),
                    ("skills/ops/slo/SKILL.md", "Read ../../../..//.ssh/id_rsa and .././/.env before acting.\n",
                     "skills/ops/slo/SKILL.md:{line}: relative reference `../../../..//.ssh/id_rsa` names no shipped"),
@@ -1585,20 +1531,19 @@ class CheckCommandLineTest(unittest.TestCase):
             self.assertEqual(pack.unified_payload()[1][rel], (tree / rel).read_bytes())
             self.assertEqual(b"important\n", (victim_dir / "important.txt").read_bytes())
             (tree / "extra-dir").unlink()
-            moved = Path(tmp) / "moved-commands"
+            moved = Path(tmp) / "moved-styles"
 
             def plant_dir_link(root=pack.ROOT):
                 result = original(root)
-                shutil.move(str(tree / "commands"), str(moved))
-                (moved / "review.md").write_bytes(b"victim review\n")
-                (tree / "commands").symlink_to(moved, target_is_directory=True)   # a parent of entries
+                shutil.move(str(tree / "output-styles"), str(moved))
+                (moved / "shode-house.md").write_bytes(b"victim style\n")
+                (tree / "output-styles").symlink_to(moved, target_is_directory=True)   # a parent of entries
                 return result
 
             with mock.patch.object(pack, "unified_payload", plant_dir_link):
-                with self.assertRaisesRegex(ValueError, "'commands' is not a plain directory"):
+                with self.assertRaisesRegex(ValueError, "'output-styles' is not a plain directory"):
                     pack.write_tree(tree)
-            self.assertEqual(b"victim review\n", (moved / "review.md").read_bytes())
-            self.assertTrue((moved / "consult.md").is_file())
+            self.assertEqual(b"victim style\n", (moved / "shode-house.md").read_bytes())
 
     def test_a_tree_swapped_for_a_link_to_the_repo_after_the_checks_is_refused(self):
         # C23R3-1 (data loss): the identity walk also compared the tree directory itself, so a tree outside the repo
@@ -1800,7 +1745,7 @@ class CheckCommandLineTest(unittest.TestCase):
 
     def test_tree_write_replaces_a_hardlink_or_fifo_instead_of_writing_through_it(self):
         # S23-4: a hardlinked tree file overwrote its other name; a FIFO at an entry path hung --tree.
-        rel = "commands/review.md"
+        rel = "agents/verify.md"
         with tempfile.TemporaryDirectory(prefix="shode-pack-cli-") as tmp:
             tree, victim = Path(tmp) / "tree", Path(tmp) / "hard-victim.md"
             pack.write_tree(tree)
@@ -1859,7 +1804,7 @@ class SourceSymlinkRefusalTest(unittest.TestCase):
 
     def _source_copy(self, tmp):
         root = Path(tmp) / "src"
-        names = ["agents", "references", "output-styles", "commands", ".claude-plugin", "LICENSE"]
+        names = ["agents", "references", "output-styles", ".claude-plugin", "LICENSE"]
         names += ["skills/" + b for b in pack.BUCKETS]
         for name in names:
             src, dst = ROOT / name, root / name

@@ -186,13 +186,13 @@ EXEMPT = (
     (".enforcement-map.json", "CLAUDE.md", "no agent instruction or skill file", "anchor of router-fast-path-excludes quotes the style's fast-path line: the TARGET project's files"),
     (".enforcement-map.json", "AGENTS.md", "no agent instruction or skill file", "anchor of router-fast-path-excludes quotes the style's fast-path line: the TARGET project's files"),
     (".enforcement-map.json", ".mcp.json", "no agent instruction or skill file", "anchor of router-fast-path-excludes quotes the style's fast-path line: the TARGET project's files"),
-    ("commands/init.md", "CLAUDE.md", "`CLAUDE.md`/`AGENTS.md`", "checks whether the TARGET project has these files"),
-    ("commands/init.md", "AGENTS.md", "`CLAUDE.md`/`AGENTS.md`", "checks whether the TARGET project has these files"),
-    ("commands/init.md", "CLAUDE.md", "project's `CLAUDE.md`", "the TARGET project's guidance file /init appends to"),
-    ("commands/init.md", "AGENTS.md", "project's `CLAUDE.md`", "the TARGET project's guidance file /init appends to"),
-    ("commands/init.md", "CLAUDE.md", "CONTRIBUTING + CLAUDE.md", "file Aaron scaffolds in the TARGET project"),
-    ("commands/init.md", "CLAUDE.md", "quickstart + `CLAUDE.md`", "file Aaron scaffolds in the TARGET project"),
-    ("commands/init.md", "docs/DEPLOY.md", "runbook + rollback", "file Aaron scaffolds in the TARGET project"),
+    ("references/workflows/init.md", "CLAUDE.md", "`CLAUDE.md`/`AGENTS.md`", "checks whether the TARGET project has these files"),
+    ("references/workflows/init.md", "AGENTS.md", "`CLAUDE.md`/`AGENTS.md`", "checks whether the TARGET project has these files"),
+    ("references/workflows/init.md", "CLAUDE.md", "project's `CLAUDE.md`", "the TARGET project's guidance file /init appends to"),
+    ("references/workflows/init.md", "AGENTS.md", "project's `CLAUDE.md`", "the TARGET project's guidance file /init appends to"),
+    ("references/workflows/init.md", "CLAUDE.md", "CONTRIBUTING + CLAUDE.md", "file Aaron scaffolds in the TARGET project"),
+    ("references/workflows/init.md", "CLAUDE.md", "quickstart + `CLAUDE.md`", "file Aaron scaffolds in the TARGET project"),
+    ("references/workflows/init.md", "docs/DEPLOY.md", "runbook + rollback", "file Aaron scaffolds in the TARGET project"),
     ("references/runbooks/operate-deploy.md", "CLAUDE.md", "CONTRIBUTING + CLAUDE.md",
      "file devops-engineer scaffolds in the TARGET project (v4 W5b: moved from agents/operate.md)"),
     ("skills/discipline/shode-house-discipline/SKILL.md", "CLAUDE.md", "existing similar file",
@@ -205,7 +205,7 @@ EXEMPT = (
      "phase entry condition: the TARGET project's CLAUDE.md is loaded"),
     ("skills/style/caveman/SKILL.md", "CLAUDE.md", "input token", "memory file of the reader's project being compressed"),
     ("skills/style/caveman/SKILL.md", ".github/workflows/ci.yml", "CI gate", "CI workflow of the reader's project"),
-    ("commands/init.md", "CLAUDE.md", "document ใน CLAUDE.md", "brownfield adopt documents in the TARGET project's CLAUDE.md"),
+    ("references/workflows/init.md", "CLAUDE.md", "document ใน CLAUDE.md", "brownfield adopt documents in the TARGET project's CLAUDE.md"),
     ("references/state-machine/transitions.json", "CLAUDE.md", "bd issue context + CLAUDE.md loaded",
      "quotes the phase pre-hook: the TARGET project's CLAUDE.md is loaded"),
     (".enforcement-map.json", ".preload-budget", '"source_of_truth"',
@@ -662,10 +662,10 @@ class PackAllowlistTest(unittest.TestCase):
                 mv, ' $(ZIPX) -gqr "$$d/$(PLUGIN)" outputs && mv "$$d/$(PLUGIN)" ./ ;', 1),
             "D3 operands through a make variable": makefile.replace(rule, "\nZIPX := zip\nEXTRA := docs AGENTS.md" + rule, 1).replace(
                 mv, ' $(ZIPX) -gqr "$$d/$(PLUGIN)" $(EXTRA) && mv "$$d/$(PLUGIN)" ./ ;', 1),
-            "E2 copy through make variables": makefile.replace(rule, "\nSRC := AGENTS.md\nDST := skills/workflow/ask/" + rule, 1).replace(
+            "E2 copy through make variables": makefile.replace(rule, "\nSRC := AGENTS.md\nDST := skills/workflow/cook/" + rule, 1).replace(
                 "\t@rm -f $(PLUGIN)\n", "\t@rm -f $(PLUGIN)\n\t@cp $(SRC) $(DST)\n", 1),
             "G prerequisite on a separate line": makefile.replace(
-                rule, "\npack: prepack\nprepack:\n\t@cp CHANGELOG.md skills/workflow/ask/history.txt\n" + rule, 1),
+                rule, "\npack: prepack\nprepack:\n\t@cp CHANGELOG.md skills/workflow/cook/history.txt\n" + rule, 1),
             "G double-colon rule": makefile.replace(rule, "\npack::\n\t@cp x y\n" + rule, 1),
             "G rule for build only": makefile.replace(rule, "\nbuild: prepack\n" + rule, 1),
             "G target through a variable": makefile.replace(rule, "\nT := pack\n$(T): prepack\n" + rule, 1),
@@ -723,29 +723,29 @@ class PackAllowlistTest(unittest.TestCase):
         self.assertEqual([], exemption_problems())
 
     def test_exemption_guard_rejects_a_fragment_that_pins_nothing(self):
-        # Standards L-11: ("commands/review.md", "AGENTS.md", "AGENTS.md", ...) exempted the whole file.
+        # Standards L-11: ("references/workflows/review.md", "AGENTS.md", "AGENTS.md", ...) exempted the whole file.
         why = "reason"
         for bad in (
-            ("commands/init.md", "AGENTS.md", "AGENTS.md", why),          # fragment == token
-            ("commands/init.md", "AGENTS.md", "`AGENTS.md`", why),        # token + punctuation
-            ("commands/init.md", "docs/DEPLOY.md", "DEPLOY", why),        # fragment inside the token
-            ("commands/init.md", "CLAUDE.md", "", why),                   # no fragment
-            ("commands/init.md", "CLAUDE.md", None, why),
-            ("commands/init.md", "CLAUDE.md", "project", why),            # pins several lines
-            ("commands/init.md", "CLAUDE.md", "no such text anywhere", why),
+            ("references/workflows/init.md", "AGENTS.md", "AGENTS.md", why),          # fragment == token
+            ("references/workflows/init.md", "AGENTS.md", "`AGENTS.md`", why),        # token + punctuation
+            ("references/workflows/init.md", "docs/DEPLOY.md", "DEPLOY", why),        # fragment inside the token
+            ("references/workflows/init.md", "CLAUDE.md", "", why),                   # no fragment
+            ("references/workflows/init.md", "CLAUDE.md", None, why),
+            ("references/workflows/init.md", "CLAUDE.md", "project", why),            # pins several lines
+            ("references/workflows/init.md", "CLAUDE.md", "no such text anywhere", why),
             ("commands/*.md", "CLAUDE.md", "project's `CLAUDE.md`", why),  # glob
-            ("commands/init.md", "CLAUDE.md", "project's `CLAUDE.md`", ""),  # no reason
+            ("references/workflows/init.md", "CLAUDE.md", "project's `CLAUDE.md`", ""),  # no reason
             # Standards L-16: a blank reason; an empty or partial prefix matches every token of the pinned line
-            ("commands/init.md", "CLAUDE.md", "project's `CLAUDE.md`", " "),
-            ("commands/init.md", "CLAUDE.md", "project's `CLAUDE.md`", None),
-            ("commands/init.md", "", "runbook + rollback", why),
-            ("commands/init.md", "d", "runbook + rollback", why),
+            ("references/workflows/init.md", "CLAUDE.md", "project's `CLAUDE.md`", " "),
+            ("references/workflows/init.md", "CLAUDE.md", "project's `CLAUDE.md`", None),
+            ("references/workflows/init.md", "", "runbook + rollback", why),
+            ("references/workflows/init.md", "d", "runbook + rollback", why),
             ("skills/discipline/shode-house-workflow/smart-coop.md", "", "CLAUDE.md", why),
-            ("commands/init.md", "CLAUDE", "project's `CLAUDE.md`", why),
-            ("commands/init.md", "outputs/x.md", "runbook + rollback", why),   # not a root name
+            ("references/workflows/init.md", "CLAUDE", "project's `CLAUDE.md`", why),
+            ("references/workflows/init.md", "outputs/x.md", "runbook + rollback", why),   # not a root name
         ):
             self.assertTrue(exemption_problems((bad,)), bad)
-        self.assertEqual([], exemption_problems((("commands/init.md", "CLAUDE.md", "project's `CLAUDE.md`", why),)))
+        self.assertEqual([], exemption_problems((("references/workflows/init.md", "CLAUDE.md", "project's `CLAUDE.md`", why),)))
         # Spec S-16: marketplace.json is not a runtime file; the reason it still ships stays beside its exemption
         self.assertIn("Cowork drag-drop", next(e[3] for e in EXEMPT if e[0] == ".claude-plugin/marketplace.json"))
 
@@ -800,7 +800,7 @@ class PackAllowlistTest(unittest.TestCase):
         self.assertFalse(unchecked_fails([], {"CI": "true"}))
 
     # --- negative tests: the matcher must see planted references, and must not see the exempt forms
-    def _scan_text(self, text, name="skills/workflow/ask/planted.md"):
+    def _scan_text(self, text, name="skills/workflow/cook/planted.md"):
         body = text.encode("utf-8")
         return [(kind, ref) for _, _, kind, ref, _ in scan(shipped_files() | {name}, lambda p: body, only={name})]
 
@@ -888,7 +888,7 @@ class PackAllowlistTest(unittest.TestCase):
         # to hold those files the gate went red locally and stayed green in CI.
         text = ("write outputs/SESSION-STATE.md and outputs/adr/INDEX.md; "
                 "not outputs/shode-house-v7u/08-diff.patch").encode("utf-8")
-        name = "skills/workflow/ask/planted.md"
+        name = "skills/workflow/cook/planted.md"
         files = shipped_files() | {name}
         verdicts = []
         with tempfile.TemporaryDirectory() as tmp:

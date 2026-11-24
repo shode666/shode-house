@@ -30,7 +30,7 @@ bd-3:               `plan` (architecture mode) design ▸ `build` ───
 
 ## 🔁 Multi-bd Long-run Orchestration (🔴 wire harness contract)
 
-long run = หลาย bd ต่อเนื่อง. enforce ด้วย harness contract (ดู `/init` rule 11 + `shode-house-workflow/harness.md`):
+long run = หลาย bd ต่อเนื่อง. enforce ด้วย harness contract (ดู `cook init` rule 11 + `shode-house-workflow/harness.md`):
 
 - **Checkpoint** = confirmed canonical record ตาม `shode-house-workflow/harness.md`; resume จาก phase/owner/evidence จริง ไม่สร้าง store ที่สอง
 - **Fan-out cap** = WIP limit ต่อ stage (default 2-3); ห้าม spawn bd พร้อมกันเกิน cap (token spike + router context bloat)

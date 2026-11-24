@@ -110,7 +110,7 @@ jobs:
             grep -q 'claude-fable-5' "$f" && err "$f: contains 'claude-fable-5'"
             if grep -q '|' "$f" && grep -iE '\|' "$f" | grep -iqE '(fable-5).*(opus|sonnet|haiku)|opus.*(sonnet|haiku)|sonnet.*haiku'; then
               err "$f: model matrix row"; fi
-          done < <(find skills -mindepth 3 -name SKILL.md; find commands -name '*.md')
+          done < <(find skills -mindepth 3 -name SKILL.md; find references/workflows -name '*.md')
 
           sec "7. manifest arrays = './' path strings"
           for fn in "$PJ" "$MK"; do for fld in skills commands agents; do
@@ -195,7 +195,7 @@ jobs:
             while read -r p; do [ -e "$p" ] || err "$src: broken ref '$p'"
             done < <(grep -oE '`(skills|commands|agents|references|output-styles|docs)/[^`]+`' "$src" | tr -d '`' \
                      | grep -vE '[<>*?{}]' | sed 's:/$::' | sort -u)
-          done < <(printf '%s\n' README.md CLAUDE.md AGENTS.md docs/cowork-validator-history.md docs/repo-invariants/*.md agents/*.md commands/*.md; find skills -name '*.md' -not -path '*/deprecated/*')
+          done < <(printf '%s\n' README.md CLAUDE.md AGENTS.md docs/cowork-validator-history.md docs/repo-invariants/*.md agents/*.md references/workflows/*.md; find skills -name '*.md' -not -path '*/deprecated/*')
           [ $fail -eq 0 ] && ok "path refs resolve"
 
           sec "13. agent skills: preload resolves to a shipped skill"
@@ -306,17 +306,7 @@ jobs:
           sec "18. tool reachability — command/agent เรียก tool ที่ตัวเองไม่ได้รับอนุญาต (v3.12)"
           # blocker ที่ full-scan เจอ: /init สั่งใช้ AskUserQuestion, commands สั่งโหลด skill,
           # /review สั่ง addComment, reviewer ถูกบังคับใช้ browser MCP -- ทั้งหมดไม่อยู่ใน allowed-tools/tools
-          for f in commands/*.md; do n=$(basename "$f")
-            at=$(awk '/^---$/{c++;next} c==1&&/^allowed-tools:/{sub(/^allowed-tools:[ \t]*/,"");print;exit}' "$f")
-            body=$(awk '/^---$/{c++;next} c>=2' "$f")
-            echo "$body" | grep -q 'AskUserQuestion' && ! echo "$at" | grep -q 'AskUserQuestion' \
-              && err "$n: body uses AskUserQuestion but allowed-tools omits it"
-            echo "$body" | grep -qE '(invoke|โหลด|ใช้)[^\n]*`[a-z-]+` skill|Skill tool' && ! echo "$at" | grep -q '\bSkill\b' \
-              && err "$n: body loads a skill but allowed-tools omits Skill"
-            for t in $(echo "$body" | grep -oE 'mcp__[A-Za-z0-9_]+' | sort -u); do
-              echo "$at" | grep -q "$t" || err "$n: body calls $t but allowed-tools omits it"
-            done
-          done
+          # 4.2.0: the command half is gone with commands/ (cook is the single entry and a skill); lost coverage recorded in CHANGELOG
           for f in agents/*.md; do n=$(basename "$f" .md)
             tl=$(awk '/^---$/{c++;next} c==1&&/^tools:/{print;exit}' "$f")
             [ -z "$tl" ] && continue
@@ -350,7 +340,7 @@ jobs:
           sec "19. review dispatch graph — axis ที่ checklist ประกาศ ต้องถูกส่งจริง (v3.12)"
           # blocker: Spec axis เป็น headline ของ 3.12 แต่ kickoff ไม่เคยส่ง agent ไปทำ
           if [ -f skills/discipline/review-checklist/spec-axis.md ]; then
-            for c in commands/implement.md commands/review.md; do
+            for c in references/workflows/implement.md references/workflows/review.md; do
               grep -q 'Spec axis' "$c" || err "$c: review-checklist declares a Spec axis but this command never dispatches it"
             done
             [ $fail -eq 0 ] && ok "Spec axis dispatched in implement + review"
@@ -359,9 +349,9 @@ jobs:
           # v3.14 (bd:B3): REVIEW DISPATCH CARD -- mandatory pre-fan-out block (mutation-testable:
           # deleting any one literal below must fail this gate). v4 W6 (ADR F-2): the per-axis card lives in the
           # router style; the commands record it as [REVIEW DISPATCH CARD] and point at it.
-          RC=commands/review.md; ST=output-styles/shode-house.md
+          RC=references/workflows/review.md; ST=output-styles/shode-house.md
           grep -qF '[REVIEW DISPATCH CARD]' "$RC" || err "$RC: missing literal '[REVIEW DISPATCH CARD]' header"
-          for c in "$RC" commands/implement.md; do
+          for c in "$RC" references/workflows/implement.md; do
             grep -qF '`output-styles/shode-house.md` § Review card' "$c" || err "$c: missing pointer to the router style § Review card"
           done
           for axis in standards spec runtime security domain ui; do
@@ -374,7 +364,7 @@ jobs:
           grep -qxF -- "$SP" "$ST" || err "$ST: spec axis must be exactly: $SP"
           ! grep -E '^- axis=(standards|spec):' "$ST" | grep -vxF -e "$SD" -e "$SP" | grep -q . \
             || err "$ST: standards/spec axis must never offer SKIP (an extra or changed axis line)"
-          for c in "$RC" commands/implement.md; do
+          for c in "$RC" references/workflows/implement.md; do
             grep -qF 'spec is always DISPATCH' "$c" || err "$c: missing 'spec is always DISPATCH'"
           done
           grep -qF 'BLOCKED: no-spec' "$RC" || err "$RC: missing literal 'BLOCKED: no-spec' (no spec = missing acceptance, never a spec PASS)"
@@ -572,7 +562,7 @@ jobs:
           done < <(grep -rn '`[a-z0-9-]*\.md`' skills 2>/dev/null | grep -av '^[^:]*:[0-9]*:LOAD:')
 
           # 24c. AGENTS.md invariant: skill ที่ผลิต deliverable ต้องมี 2 gate heading
-          # ยกเว้นเฉพาะ style skill ที่ไม่ผลิต artifact (v3.17: entry skill `ask` ไม่มี exception แล้ว)
+          # ยกเว้นเฉพาะ style skill ที่ไม่ผลิต artifact (v3.17: entry skill `cook` ไม่มี exception แล้ว)
           for f in skills/workflow/*/SKILL.md skills/ops/*/SKILL.md skills/ui/*/SKILL.md \
                    skills/discipline/review-checklist/SKILL.md; do
             grep -q '^## When NOT to use' "$f" || err "$f: ขาด '## When NOT to use' (AGENTS.md invariant)"

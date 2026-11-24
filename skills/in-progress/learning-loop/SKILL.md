@@ -37,7 +37,7 @@ loop จะ **ไม่สะดุด** ถ้าแยก 2 path เด็ด�
 - bd ปิดได้ทันที — **ไม่รอ** distill/gate/promote
 
 ### Cold path (offline / out-of-band — อยู่นอก loop จึงสะดุดไม่ได้)
-- distill (recurrence ≥ N → candidate draft) + human gate + check_index/lint + eval-harness → รันแยก (maintainer-trigger / schedule) เหมือน eval-harness "offline, ไม่อยู่ใน /implement loop"
+- distill (recurrence ≥ N → candidate draft) + human gate + check_index/lint + eval-harness → รันแยก (maintainer-trigger / schedule) เหมือน eval-harness "offline, ไม่อยู่ใน cook implement loop"
 - promote เข้า bucket = ทำตอนว่าง, ไม่เกี่ยวกับ bd ที่กำลังวิ่ง
 
 > สะดุดเมื่อไหร่: ถ้าเอา distill/gate ไปไว้ใน hot loop หรือ load lessons แบบ unbounded. กฎนี้ห้ามทั้งสอง

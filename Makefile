@@ -12,7 +12,7 @@ help:
 	@echo "shode-house dev-loop:"
 	@echo "  make validate   run the same invariant + lint gate as CI (bash + jq)"
 	@echo "  make pack       build $(PLUGIN) artifact (zip)"
-	@echo "  make stats      skill/agent/command counts"
+	@echo "  make stats      skill/agent counts"
 	@echo "  make skills     list shipped skills by bucket"
 	@echo "  make test-team-package  verify 3.15 team knowledge survives packaging"
 	@echo "  make test-team-candidate  check plugins/shode-house (multi-host tree) against source"
@@ -56,7 +56,6 @@ pack build:
 stats:
 	@printf 'agents:   %s\n' "$$(ls agents/*.md | wc -l | tr -d ' ')"
 	@printf 'skills:   %s (shipped buckets)\n' "$$(find skills/workflow skills/ops skills/ui skills/style skills/discipline -name SKILL.md | wc -l | tr -d ' ')"
-	@printf 'commands: %s\n' "$$(ls commands/*.md | wc -l | tr -d ' ')"
 
 # Maintainer-only inventory regression, not a runtime dependency or parity claim.
 test-team-package: pack

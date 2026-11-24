@@ -77,7 +77,7 @@ deny() {
 
 # 1) Engagement guard -- pure bash, FIRST statement that can exit, before stdin/jq is
 #    ever touched (NFR: no-op path <=30ms p95, MUST NOT invoke jq -- 02-sara-adr-1a.md
-#    Sec 1; ADR-C2). A project that never ran /init (no .shode-house/state/) pays ~0ms.
+#    Sec 1; ADR-C2). A project that never ran cook init (no .shode-house/state/) pays ~0ms.
 [ -e "$state_dir" ] || exit 0
 
 # 2) Symlink refuse -- fail CLOSED (Hook Charter Sec 7 table: "guard dir เป็น symlink ->

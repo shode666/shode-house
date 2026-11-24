@@ -277,7 +277,7 @@ def check_routing(expected, main_batches, open_ended, main_record_count=0):
     'overlap' | 'sequential' | 'same-message' | 'separate-messages'.
 
     iter9 (Oliver bd:B1): a step can carry `"optional": true` (e.g. GS1's trailing developer
-    fix-iteration step, which only happens when /review finds something to fix) — if an optional
+    fix-iteration step, which only happens when cook review finds something to fix) — if an optional
     step's agents are never observed, that is NOT a routing FAIL, just a skipped/unobserved step;
     `ptr` does not advance past it, and later required steps still match normally from the same
     position."""
@@ -705,7 +705,7 @@ def evidence_dimension(session):
 
 
 # ---------- REVIEW DISPATCH CARD (bd:B3 / B1 iter12, Oliver — Sara's 01-sara-1a.md §2/§6) ----------
-# /review's non-deterministic fan-out (FACT 1: sequential 3-message spawn missing spec+security
+# cook review's non-deterministic fan-out (FACT 1: sequential 3-message spawn missing spec+security
 # axes on one run, full 5-agent parallel fan-out on another) is fixed at the prompt layer by a
 # mandatory printed block Oliver must emit before spawning anything -- this is the runtime (E2E)
 # half of that fix (§6): golden.json's `required_main_phrases` names literal phrase(s) that MUST
@@ -744,7 +744,7 @@ def _main_text(session):
 
 def dispatch_card_check(scenario, session):
     """-> (verdict, detail). N/A when the scenario has no `required_main_phrases` configured
-    (this is opt-in per scenario, not a blanket rule on every /review run)."""
+    (this is opt-in per scenario, not a blanket rule on every cook review run)."""
     required_phrases = scenario.get('required_main_phrases') or []
     if not required_phrases:
         return 'N/A', 'no required_main_phrases configured for this scenario'
@@ -1029,9 +1029,9 @@ def bd_end_state(scenario, bd_id_override=None, cwd=None):
     UNSCORABLE (bd/session likely missing) rather than blindly regex-matching empty/error output.
 
     iter13 (Oliver bd:B1): real GS1 run-2 false-FAILed here because `bd` stayed OPEN -- which is
-    the CORRECT pipeline behaviour for `/review` with unresolved findings, not a bug. `bd_status`
+    the CORRECT pipeline behaviour for `cook review` with unresolved findings, not a bug. `bd_status`
     now accepts either a single string (implement scenarios: CLOSED-only, unchanged) OR a list of
-    acceptable statuses (`["OPEN","CLOSED"]` for /review scenarios — either is fine, since /review
+    acceptable statuses (`["OPEN","CLOSED"]` for cook review scenarios — either is fine, since cook review
     doesn't always close the bd). New `notes_pattern` field independently verifies the review
     verdict was actually RECORDED in `bd show` output (e.g. `Standards|Spec|verdict|PASS|FAIL`) --
     this is what actually proves the review ran and left a trail, since bd_status alone can no

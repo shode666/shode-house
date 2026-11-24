@@ -1149,7 +1149,9 @@ class ScenarioDataTest(unittest.TestCase):
         scenarios = [e01 if s["id"] == "E01" else s for s in NEW]
         self.assertEqual(ids, [s["id"] for s in scenarios])
         self.assertTrue({"E01"} | {f"P{n:02d}" for n in range(1, 16)} <= set(ids))
-        skills = {p.parent.name for p in ROOT.glob("skills/*/*/SKILL.md")}
+        # 4.2.0 (shode-house-wy5): the hash-frozen golden.json probe battery still names the retired entry skill (ask,
+        # renamed `cook`; D9: frozen files are never edited), so a frozen-battery name may be that one retired entry.
+        skills = {p.parent.name for p in ROOT.glob("skills/*/*/SKILL.md")} | {"ask"}  # tombstone-allow
         agents = {p.stem for p in ROOT.glob("agents/*.md")}
         sys.path.insert(0, str(ROOT / "tests"))
         from test_team_package import RETIRED
@@ -1176,7 +1178,7 @@ class ScenarioDataTest(unittest.TestCase):
                     self.assertTrue(exp.get("max_spawns") == 1 and exp.get("must_not_dispatch"), s["id"])
                 # ... and for over-triggering: all unrelated workflow/ops/ui skills are forbidden loads
                 target = {r[6:] for r in routes if r.startswith("skill:")}
-                unrelated = workflow_ops_ui - target - set(s.get("related", [])) - {"ask", "meeting"}
+                unrelated = workflow_ops_ui - target - set(s.get("related", [])) - {"cook", "meeting"}
                 self.assertFalse(unrelated - set(exp.get("must_not_load", [])), f'{s["id"]}: must_not_load misses {unrelated - set(exp.get("must_not_load", []))}')
                 if s["class"] != "negative":
                     self.assertEqual(exp.get("max_skills"), 2, s["id"])

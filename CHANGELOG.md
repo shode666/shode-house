@@ -7,6 +7,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [4.2.0] — 2026-11-22
 
+### BREAKING
+
+- **One public entry: `cook`.** The entry skill formerly named ask was renamed `cook` (same router, same text; its new `## Workflow selection` table is the only addition). The five commands (consult, design-system, init, implement, review) were removed with **no alias, wrapper, adapter or stub**; their bodies moved to `references/workflows/{consult,spec,init,implement,review}.md`, which only `cook` selects. `commands/` no longer exists, the manifests register no commands, and no file, skill, manifest entry or generated path is named ask (`tests/test_tombstone.py` keeps it that way). This is a one-time exception to the 1-2 release alias window in AGENTS.md § Commands (user decision, task shode-house-wy5).
+- Migration (old → new):
+
+| Old | New |
+|---|---|
+| `/shode-house:ask <x>`, skill `shode-house:ask`, Codex skill `ask` | `/shode-house:cook <x>`, skill `shode-house:cook`, Codex skill `cook` |
+| `/shode-house:consult <q>` | `/shode-house:cook <q>` |
+| `/shode-house:init [name]` · `/shode-house:init --quick "<stack>"` | `/shode-house:cook init [name]` · `/shode-house:cook init --quick "<stack>"` |
+| `/shode-house:design-system <x> [--stop] [--estimate]` | `/shode-house:cook spec <x> [--stop] [--estimate]` |
+| `/shode-house:implement <id>` | `/shode-house:cook implement <id>` |
+| `/shode-house:review <target>` · `--debt` | `/shode-house:cook review <target>` · `/shode-house:cook review --debt` |
+| Project instructions that load `shode-house:ask` | `shode-house:cook` |
+
+- The other 19 skills are still listed by the host as skills; `cook` is the only *entry*.
+- Lost coverage (recorded, not replaced): CI #18 checked `allowed-tools` of `commands/*.md`; with no commands that half is gone, and the workflow references carry no `allowed-tools`, so they run with the main session's tools under the router style. `.workflow-scenario-budget` keys now measure the workflow references; the real path (cook plus a workflow) is not measured as one scenario.
+- Collision scan: a project `.claude/commands/<name>.md` is now also warned (never denied) when `<name>` equals a shipped skill name, and the flat generated-tree layout (`skills/<name>/SKILL.md`) names its shipped skills. Native `/cook` versus `/shode-house:cook` duplicate discovery is not claimed until recorded on a real host.
+- Not renamed on purpose: the quoted token in `scripts/team-run-check.py` (the ask-the-user action vocabulary, frozen by `eval/FREEZE.sha256`) and the frozen 4.0.x/4.0.2 probe batteries; the active battery names the retired entry and needs a new battery after release.
+
 ### Added
 
 - A lazy interface-quality critique card for the `design` role: precise typography, composition, affordance, feedback and motion vocabulary; optional background directions with brand, legibility, performance and reduced-motion constraints; and contextual anti-slop prompts that require concrete task, hierarchy, brand or accessibility harm instead of banning familiar aesthetics.

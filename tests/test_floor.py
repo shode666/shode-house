@@ -24,12 +24,12 @@ def style(block):
     return f"---\nname: shode-house\ndescription: router\n---\n\n{block}\n## Routing\n- route\n"
 
 
-ASK_ADAPTER = "plugins/shode-house/skills/ask/SKILL.md"
+ENTRY_ADAPTER = "plugins/shode-house/skills/cook/SKILL.md"
 
 
 def adapter(block):
-    """Generated `ask` adapter: the skills-only host carrier of the style floor (ADR erratum 1 §5.8.1)."""
-    return f"---\nname: ask\ndescription: entry\n---\n\n{block}\nUse the referenced skill as the entry point.\n"
+    """Generated `cook` entry skill: the skills-only host carrier of the style floor (ADR erratum 1 §5.8.1)."""
+    return f"---\nname: cook\ndescription: entry\n---\n\n{block}\nUse the referenced skill as the entry point.\n"
 
 
 class FloorFixture(unittest.TestCase):
@@ -46,8 +46,8 @@ class FloorFixture(unittest.TestCase):
         self.put("output-styles/shode-house.md", style(STYLE))
         self.put("plugins/shode-house/output-styles/shode-house.md", style(STYLE))
         self.put("plugins/shode-house/knowledge/output-styles/shode-house.md", style(STYLE))
-        self.put(ASK_ADAPTER, adapter(STYLE))
-        self.put("skills/workflow/ask/SKILL.md", "---\nname: ask\n---\n\n# ask\n")
+        self.put(ENTRY_ADAPTER, adapter(STYLE))
+        self.put("skills/workflow/cook/SKILL.md", "---\nname: cook\n---\n\n# cook\n")
         self.put("plugins/shode-house/skills/shode-house-discipline/SKILL.md", "---\nname: d\n---\n\n# discipline\n")
 
     def put(self, rel, text):
@@ -187,9 +187,9 @@ class CheckTest(FloorFixture):
         self.assertRed("style floor: no file matches output-styles/*.md", "--require")
 
     def test_required_mode_needs_the_ask_adapter(self):  # Sentinel R2-5
-        os.remove(self.tmp / ASK_ADAPTER)
+        os.remove(self.tmp / ENTRY_ADAPTER)
         self.assertEqual(0, self.run_floor("--check")[0])
-        self.assertRed("style floor: no file matches plugins/*/skills/ask/SKILL.md -- required", "--require")
+        self.assertRed("style floor: no file matches plugins/*/skills/cook/SKILL.md -- required", "--require")
 
     def test_required_mode_needs_the_generated_tree(self):  # Sentinel R2-5
         shutil.rmtree(self.tmp / "plugins")
@@ -197,7 +197,7 @@ class CheckTest(FloorFixture):
         self.assertEqual(0, rc, out)
         out = self.assertRed("body floor: no file matches plugins/*/agents/*.md", "--require")
         for pattern in ("plugins/*/knowledge/agents/*.md", "plugins/*/output-styles/*.md",
-                        "plugins/*/knowledge/output-styles/*.md", "plugins/*/skills/ask/SKILL.md"):
+                        "plugins/*/knowledge/output-styles/*.md", "plugins/*/skills/cook/SKILL.md"):
             self.assertIn(f"no file matches {pattern} -- required", out)
 
     def test_canonical_must_be_one_clean_block(self):
@@ -286,8 +286,8 @@ class PlacementTest(FloorFixture):
 
     def test_misplaced_style_and_adapter_blocks_are_red(self):
         self.assertMisplaced(style("Router.\n\n" + STYLE), "output-styles/shode-house.md")
-        self.put(ASK_ADAPTER, adapter("```\n" + STYLE + "```\n"))
-        self.assertRed(f"{ASK_ADAPTER}: {self.MSG}", "--require")
+        self.put(ENTRY_ADAPTER, adapter("```\n" + STYLE + "```\n"))
+        self.assertRed(f"{ENTRY_ADAPTER}: {self.MSG}", "--require")
 
     def test_empty_lines_after_the_frontmatter_pass(self):
         self.put("agents/build.md", "---\nname: build\n---\n\n\n\n" + BODY + "Intro.\n")
@@ -299,8 +299,8 @@ class PlacementTest(FloorFixture):
         self.assertMisplaced(BODY + "---\nname: build\ntools: [\"Read\"]\n---\n\n## Role\n")
         self.assertMisplaced("\n\n" + BODY + "Intro.\n")                       # no frontmatter at all
         self.assertMisplaced(STYLE + style(""), "output-styles/shode-house.md")
-        self.put(ASK_ADAPTER, STYLE + adapter(""))
-        self.assertRed(f"{ASK_ADAPTER}: {self.MSG}", "--require")
+        self.put(ENTRY_ADAPTER, STYLE + adapter(""))
+        self.assertRed(f"{ENTRY_ADAPTER}: {self.MSG}", "--require")
 
     def test_frontmatter_lines_must_be_exactly_three_dashes(self):  # Chris W4 r3 S4r3-1 (mutants C3 / C4)
         self.assertMisplaced("--- \nname: build\n---\n\n" + BODY)
@@ -308,29 +308,29 @@ class PlacementTest(FloorFixture):
 
 
 class AskAdapterAndElsewhereTest(FloorFixture):
-    """ADR erratum 1 §5.8.1: the generated ask adapter is a style target; a floor anywhere else is red."""
+    """ADR erratum 1 §5.8.1: the generated cook entry skill is a style target; a floor anywhere else is red."""
 
     def test_adapter_without_the_block_is_pending_then_red(self):
-        self.put(ASK_ADAPTER, adapter(""))
+        self.put(ENTRY_ADAPTER, adapter(""))
         rc, out = self.run_floor("--check", "--verbose")
         self.assertEqual(0, rc, out)
-        self.assertIn(f"~ pending {ASK_ADAPTER}: no floor markers", out)
-        self.assertRed(f"{ASK_ADAPTER}: no floor markers -- required", "--require")
+        self.assertIn(f"~ pending {ENTRY_ADAPTER}: no floor markers", out)
+        self.assertRed(f"{ENTRY_ADAPTER}: no floor markers -- required", "--require")
 
     def test_adapter_empty_pair_is_pending_before_4(self):
-        self.put(ASK_ADAPTER, adapter("<!-- floor:style:begin -->\n<!-- floor:style:end -->\n"))
+        self.put(ENTRY_ADAPTER, adapter("<!-- floor:style:begin -->\n<!-- floor:style:end -->\n"))
         rc, out = self.run_floor("--check")
         self.assertEqual(0, rc, out)
         self.assertIn("1 pending", out)
-        self.assertRed(f"{ASK_ADAPTER}: markers present, text not written yet", "--require")
+        self.assertRed(f"{ENTRY_ADAPTER}: markers present, text not written yet", "--require")
 
     def test_adapter_byte_change_is_red(self):
-        self.edit(ASK_ADAPTER, "confirm first.", "confirm first if risky.")
-        self.assertRed(f"{ASK_ADAPTER}: style floor sha256")
+        self.edit(ENTRY_ADAPTER, "confirm first.", "confirm first if risky.")
+        self.assertRed(f"{ENTRY_ADAPTER}: style floor sha256")
 
     def test_adapter_with_the_body_floor_is_red(self):
-        self.put(ASK_ADAPTER, adapter(BODY))
-        self.assertRed(f"{ASK_ADAPTER}: carries the body floor markers")
+        self.put(ENTRY_ADAPTER, adapter(BODY))
+        self.assertRed(f"{ENTRY_ADAPTER}: carries the body floor markers")
 
     def test_block_in_the_tree_discipline_root_is_red_in_both_modes(self):
         rel = "plugins/shode-house/skills/shode-house-discipline/SKILL.md"
@@ -341,12 +341,12 @@ class AskAdapterAndElsewhereTest(FloorFixture):
                 self.assertIn(f"{rel}: floor text line 6 outside a floor target", out)
 
     def test_block_in_the_source_ask_skill_is_red(self):
-        self.put("skills/workflow/ask/SKILL.md", "---\nname: ask\n---\n\n" + STYLE + "\n# ask\n")
-        self.assertRed("skills/workflow/ask/SKILL.md: floor marker outside a floor target (floor elsewhere)")
+        self.put("skills/workflow/cook/SKILL.md", "---\nname: cook\n---\n\n" + STYLE + "\n# cook\n")
+        self.assertRed("skills/workflow/cook/SKILL.md: floor marker outside a floor target (floor elsewhere)")
 
     def test_marker_text_in_other_shipped_dirs_is_red(self):
-        for rel in ("references/runbooks/x.md", "commands/ask.md", "agents/sub/notes.md",
-                    "plugins/shode-house/knowledge/skills/workflow/ask/SKILL.md", "plugins/shode-house/HOST-NOTES.md"):
+        for rel in ("references/runbooks/x.md", "references/workflows/x.md", "agents/sub/notes.md",
+                    "plugins/shode-house/knowledge/skills/workflow/cook/SKILL.md", "plugins/shode-house/HOST-NOTES.md"):
             with self.subTest(file=rel):
                 self.put(rel, "text <!-- floor:begin --> text\n")
                 self.assertRed(f"{rel}: floor marker outside a floor target (floor elsewhere)")
@@ -612,7 +612,7 @@ class AskAdapterAndElsewhereTest(FloorFixture):
             "agents/build.md": ("## Role\n", "## Safety floor (relaxed)\n- R0 (irreversible: only prod)\n## Role\n"),
             "plugins/shode-house/agents/verify.md": ("footer\n", "footer\n- R0 (irreversible: force-push): fine\n"),
             "output-styles/shode-house.md": ("## Routing\n", "### safety floor (weaker)\n## Routing\n"),
-            ASK_ADAPTER: ("Use the referenced", "<!--floor:style:begin-->\nUse the referenced"),
+            ENTRY_ADAPTER: ("Use the referenced", "<!--floor:style:begin-->\nUse the referenced"),
         }
         for rel, (old, new) in cases.items():
             with self.subTest(file=rel):
@@ -637,8 +637,8 @@ class AskAdapterAndElsewhereTest(FloorFixture):
         self.assertRed("agents/build.md: floor text line 4 outside the body floor block (floor elsewhere)")
 
     def test_floor_line_prefixes_inside_a_sentence_pass(self):
-        self.put("skills/workflow/ask/SKILL.md", "---\nname: ask\n---\n\nThe ## Safety floor ( heading lives in bodies.\n"
-                 "- the safety floor (see ask) and R0 (irreversible) STOP+ask\n| R0 (irreversible: table cell) |\n")
+        self.put("skills/workflow/cook/SKILL.md", "---\nname: cook\n---\n\nThe ## Safety floor ( heading lives in bodies.\n"
+                 "- the safety floor (see cook) and R0 (irreversible) STOP+ask\n| R0 (irreversible: table cell) |\n")
         rc, out = self.run_floor("--check", "--require")
         self.assertEqual(0, rc, out)
 
@@ -726,7 +726,7 @@ class RealCanonicalTest(unittest.TestCase):
          ("plugins/*/agents/*.md", "plugins/*/knowledge/agents/*.md")),
         ("style", ".safety-floor/style.md", "<!-- floor:style:begin -->", "<!-- floor:style:end -->",
          ("output-styles/*.md",), ("plugins/*/output-styles/*.md", "plugins/*/knowledge/output-styles/*.md",
-                                   "plugins/*/skills/ask/SKILL.md")),
+                                   "plugins/*/skills/cook/SKILL.md")),
     }
 
     def test_floor_kinds_are_the_pinned_files(self):

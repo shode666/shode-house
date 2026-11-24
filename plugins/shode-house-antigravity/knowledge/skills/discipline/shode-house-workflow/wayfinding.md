@@ -36,7 +36,7 @@ REQUIRED-BEFORE: map_creation
         ↓
 Phase 0 Discover → Phase 1a Spec → ... → drain
 ```
-- `/design-system` สมมติว่า **รู้รูปงานแล้ว** — ผลิต spec ของ **1 bd** ไม่ใช่ของ initiative ทั้งก้อน
+- `cook spec` สมมติว่า **รู้รูปงานแล้ว** — ผลิต spec ของ **1 bd** ไม่ใช่ของ initiative ทั้งก้อน
 - `shode-house:drain` ต้องการ item ที่ **verified + concrete + independent** อยู่แล้ว — ไม่ได้สร้าง ready set
 - ไม่มี Map → ได้ 2 ทางที่แย่ทั้งคู่: **spec ยักษ์ล่วงหน้า** (`plan` (requirements mode) เขียนทุกอย่างจากการเดา = anchoring + เขียนทิ้ง) หรือ **ค่อย ๆ ไหลไปเรื่อย ๆ** (SCOPE DRIFT ที่ไม่มีใครจับได้)
 
@@ -124,9 +124,9 @@ Continue eligible authorized tickets with per-ticket evidence and ownership. Che
 1. **ตั้งชื่อ destination** — grill (frontier model) + สร้าง domain glossary ให้ชัดว่า map นี้กำลังไปหาอะไร. **destination ตรึง scope จึงต้องเสร็จก่อนเพื่อนเสมอ**
 2. **สำรวจ frontier แบบ breadth-first** — กวาดให้ทั่วพื้นที่ ไม่ลงลึกเส้นใดเส้นหนึ่ง; หา decision ที่เปิดอยู่ + ก้าวแรกที่ทำได้เลย
    **No fog** → skip the map and continue the authorized pipeline; ask only for missing scope/authority.
-   **Map-mode entry criteria** — user มาด้วยไอเดียก้อนใหญ่ที่ยัง **ไม่รู้ว่าจะเริ่มตรงไหน** (ไม่ใช่ "รู้ว่าจะทำอะไร แต่ยังไม่ได้เขียน spec") → **อย่าเพิ่งเข้า `/design-system`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)
+   **Map-mode entry criteria** — user มาด้วยไอเดียก้อนใหญ่ที่ยัง **ไม่รู้ว่าจะเริ่มตรงไหน** (ไม่ใช่ "รู้ว่าจะทำอะไร แต่ยังไม่ได้เขียน spec") → **อย่าเพิ่งเข้า `cook spec`** เพราะมันสมมติว่ารูปงานนิ่งแล้ว จะได้ spec ยักษ์ที่เขียนจากการเดา (anchoring + เขียนทิ้ง)
    **สัญญาณว่าต้องใช้ Map**: ไอเดียกินหลาย feature/ระบบ · ยังตอบไม่ได้ว่า "เสร็จ" หน้าตายังไง · มี decision ที่ต้องตัดก่อนถึงจะ spec ได้ · ก้อนใหญ่จน spec เดียวไม่พอ
-   **สัญญาณว่าไม่ต้อง**: grill รอบเดียวแล้วทางชัด → ไป `/design-system` ตรง ๆ (ข้อ 2 นี้: หยุดถ้าไม่เจอ fog)
+   **สัญญาณว่าไม่ต้อง**: grill รอบเดียวแล้วทางชัด → ไป `cook spec` ตรง ๆ (ข้อ 2 นี้: หยุดถ้าไม่เจอ fog)
 3. **สร้าง map** — Destination + Notes ครบ, Decisions so far ว่าง, หมอกร่างลง Not yet specified
 4. **สร้าง ticket เท่าที่ตั้งคำถามได้คม** เป็น child ของ map แล้ว **wire blocking เป็นรอบที่สอง** (issue ต้องมี id ก่อนถึงอ้างกันได้)
 5. The router dispatches concrete ready research within host capacity, parallel or sequential separate workers; record sourced results in the canonical evidence home and return accessible pointers.
@@ -147,6 +147,6 @@ Continue eligible authorized tickets with per-ticket evidence and ownership. Che
 ## จบ map แล้วไปไหนต่อ
 
 ทางชัด (ไม่เหลือ decision) → destination กลายเป็น input ของ pipeline ปกติ:
-- destination = spec → `/design-system` (`plan` (requirements mode) ∥ `plan` (architecture mode)) ต่อได้ทันที เพราะรูปงานนิ่งแล้ว
+- destination = spec → `cook spec` (`plan` (requirements mode) ∥ `plan` (architecture mode)) ต่อได้ทันที เพราะรูปงานนิ่งแล้ว
 - destination = ชุดงานที่ concrete + independent → `shode-house:drain`
 - destination = decision ล้วน ๆ (เช่นเลือก platform) → close map task + บันทึกเป็น ADR (`shode-house-deliverable/adr.md` § ADR Lifecycle)

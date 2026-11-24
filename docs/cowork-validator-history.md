@@ -13,7 +13,7 @@ What the `git log --grep="validator"` search turns up (it is the first step afte
 {
   "description": "Multi-agent software house team v3.1: 19 expert agents in 7 teams + 18 lazy-load skills (split meeting-god-skill into 7 discipline modules + review-checklist DRY) + 6 commands (consolidated /init+/setup-project, /design-system+/spec-only). Bucket-folder lifecycle (workflow/ops/ui/style/discipline/in-progress/deprecated). CLAUDE.md repo invariants + scripts/ dev-loop. 9arm-inspired skill craft: 4-section description format, When-NOT + Required-inputs gates, Recite Discipline Card, skill composition pointers. Covers Fintech, ERP, SAP, Trading, Insurance, Booking, E-commerce, UX/UI.", // 586 chars + em-dash → FAIL
   "skills": [
-    {"name": "ask", "path": "skills/workflow/ask", "bucket": "workflow", "role": "..."} // object form → schema reject
+    {"name": "cook", "path": "skills/workflow/cook", "bucket": "workflow", "role": "..."} // object form → schema reject
   ]
 }
 

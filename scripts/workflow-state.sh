@@ -26,7 +26,7 @@
 #
 # Engagement guard: every command is a no-op (exit 0, silent, no side effect) unless
 # "$ROOT/.shode-house" already exists. This script never creates that top-level dir --
-# it is assumed created by a separate bootstrap step (/init rule 11, out of this task's
+# it is assumed created by a separate bootstrap step (cook init rule 11, out of this task's
 # scope). This is intentional so an unrelated repo that never opted into shode-house
 # workflow-state is never touched.
 #

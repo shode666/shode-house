@@ -13,7 +13,7 @@
   "hooks": "./codex-hooks/hooks.json",
   "extensions": {
     "com.openai": {
-      "onboardingSkill": "./skills/ask/SKILL.md"
+      "onboardingSkill": "./skills/cook/SKILL.md"
     }
   },
   "interface": {

@@ -10,7 +10,7 @@ What the five shipped buckets hold today, 20 skills in all (7 · 4 · 2 · 1 · 
 
 | Bucket | Skills |
 |--------|--------|
-| `workflow/` | ask, dev-gate, automate-test, diagnose, data-migration, api-contract, decompose |
+| `workflow/` | cook, dev-gate, automate-test, diagnose, data-migration, api-contract, decompose |
 | `ops/` | incident, slo, secure, drain |
 | `ui/` | ui-test, web-q |
 | `style/` | caveman |
@@ -18,7 +18,7 @@ What the five shipped buckets hold today, 20 skills in all (7 · 4 · 2 · 1 · 
 
 The four retired names come from the v3.17 merge; the table of old name → new owner is in the CHANGELOG.
 
-`ask/SKILL.md` is the public entry point and the team orientation.
+`cook/SKILL.md` is the public entry point and the team orientation.
 
 ## Detail for `AGENTS.md` § Agents
 

@@ -5,11 +5,11 @@ Does not publish, install, edit source, or certify host compatibility. Existing
 artifacts are never overwritten. Stable publication requires separate qualification.
 
 Generated tree = source layout (v4 ADR iter 5 F-4, §5.8; erratum 1 §5.8.1/§5.8.2):
-agent files, skill roots and command bodies at the plugin root are the authored file
+agent files and skill roots at the plugin root are the authored file
 (frontmatter incl. `model:` kept) with plugin-root and `./`/`../` references re-pointed to
 its knowledge/ copy, plus a generated resolution footer. Two generated insertions exist and
-nothing else: the style safety floor in the `ask` skill (skills-only hosts) and one pointer
-line in every skill neither preloaded nor `ask`.
+nothing else: the style safety floor in the `cook` skill (skills-only hosts) and one pointer
+line in every skill neither preloaded nor `cook`.
 `${CLAUDE_PLUGIN_ROOT}/references/` (and bucketed skill paths) are rewritten to the
 tree's `knowledge/` copy, never between floor markers. A `./` or `../` file reference outside
 code fences and floor markers is rewritten to the same file's `knowledge/` copy, relative to
@@ -51,10 +51,10 @@ def _load_floor():
 floor = _load_floor()
 BUCKETS = ("workflow", "ops", "ui", "style", "discipline")
 # Publishing a command is a decision, not a side effect of adding a file: this is the
-# explicit allowlist of authored commands the distributions register. A new
-# commands/<name>.md is NOT published until it is named here (the packer refuses a
-# mismatch), so "should users get this?" is answered on purpose.
-PUBLISHED_COMMANDS = ("ask", "consult", "design-system", "implement", "init", "review")
+# explicit allowlist of authored commands the distributions register. 4.2.0 publishes none
+# (`cook` is the single entry and a skill); a new commands/<name>.md is NOT published until
+# it is named here (the packer refuses a mismatch).
+PUBLISHED_COMMANDS = ()
 # 3.17.2 shipped 19 roles; the 4.0.0 switch deleted the retired orchestrator (ADR §5.2).
 RETIRED_ROLE = "agents/orchestrator.md"
 # 4.0.1: the 18 agent types of 4.0.0 became these 6 (shode-house-jni). The set is pinned by name, not by a count that could
@@ -66,13 +66,13 @@ ROLES = frozenset({"plan", "build", "verify", "operate", "secure", "design"})
 BODY_KIND, STYLE_KIND = floor.KINDS
 BODY_FLOOR = (BODY_KIND.begin, BODY_KIND.end)
 STYLE_FLOOR = (STYLE_KIND.begin, STYLE_KIND.end)
-# The style whose floor the `ask` skill carries on skills-only hosts (erratum 1 §5.8.1 item 4).
+# The style whose floor the `cook` skill carries on skills-only hosts (erratum 1 §5.8.1 item 4).
 FLOOR_STYLE = "output-styles/shode-house.md"
-ASK_SKILL = "skills/ask/SKILL.md"
+ENTRY_SKILL = "skills/cook/SKILL.md"
 # Files that may carry a floor block in the tree; anything else carrying one is red.
-FLOOR_CARRIERS = re.compile(r"^(?:knowledge/)?(?:agents|output-styles)/[^/]+\.md$|^skills/ask/SKILL\.md$")
+FLOOR_CARRIERS = re.compile(r"^(?:knowledge/)?(?:agents|output-styles)/[^/]+\.md$|^skills/cook/SKILL\.md$")
 
-# F-4 prefix rewrite: these roots exist in the tree only under knowledge/. (`skills/ask/...`,
+# F-4 prefix rewrite: these roots exist in the tree only under knowledge/. (`skills/cook/...`,
 # `agents/...`, `commands/...` and `output-styles/...` also exist at the tree root, so stay.)
 PLUGIN_ROOT = "${CLAUDE_PLUGIN_ROOT}/"
 REWRITE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/(?=(?:references|skills/(?:%s))/)" % "|".join(BUCKETS))
@@ -119,33 +119,12 @@ UNCLOSED = ("code fence never closed (a ``` or ~~~ fence closes only on a line o
 RESOLVE = ("Resolve source-root paths beginning agents/, skills/, references/, commands/ or output-styles/ "
            "under this plugin's knowledge/ directory, not the user's project.\n")
 AUTHORITY = "Use actual host tools and preserve host/project/user authority.\n"
-# erratum 1 §5.8.1 item 5 (SE1 E1-4(ii)): the ask skill sits under a floor that nothing relaxes.
-AUTHORITY_ASK = ("Use actual host tools and preserve host/project/user authority, "
+# erratum 1 §5.8.1 item 5 (SE1 E1-4(ii)): the cook skill sits under a floor that nothing relaxes.
+AUTHORITY_ENTRY = ("Use actual host tools and preserve host/project/user authority, "
                  "except R0 and the rest of the safety floor above.\n")
-# erratum 1 §5.8.1 "Pointer line" (SE1 E1-2(b)): 117 B, in every skill neither preloaded nor ask.
+# erratum 1 §5.8.1 "Pointer line" (SE1 E1-2(b)): 117 B, in every skill neither preloaded nor cook.
 POINTER = ("No shode-house safety floor in this context (a main session without the router style)? "
-           "Load `shode-house:ask` first.\n")
-
-# `/ask` stays the hand-written wrapper of the tree `ask` skill (erratum 1 r1, E1-1: no repoint
-# to knowledge/ -- the floor-carrying skill is reached through every host's `/ask`).
-# Persona-free since W2 iter 2 (A6 retires the persona). Conditional since the S2 integration (v7u.4.12, Bella W2 L1).
-# The condition names no style (UD R52, Bella S2 M-1): it is keyed on a working delegation tool, as the ask
-# skill decides ("If delegation is unavailable ..."), so it holds at S2 and S3 alike; a session without one
-# reports team execution BLOCKED regardless of host.
-# UD R56 (W7, with erratum 1 §5.8.2): the wrapper defers to the ask skill's decision -- delegation also needs
-# the skill not to report team execution unavailable (its style-less-session rule, fail-closed), so a session
-# with Agent but no router style gets BLOCKED from the skill and no contradicting "delegate" from here.
-ASK_WRAPPER = (
-    '---\ndescription: "Work with the full Shode House team."\n---\n\n'
-    'User request: $ARGUMENTS\n\n'
-    'Use `${CLAUDE_PLUGIN_ROOT}/skills/ask/SKILL.md` as the entry point; '
-    'load further references only when it directs you to. '
-    'If this session has a working delegation tool (Agent or Task) and the ask skill does not report team '
-    'execution unavailable, delegate specialist work to the shode-house agents by agent id and never spawn the '
-    'main-session lead or router as an agent; otherwise report team execution BLOCKED instead of role-playing '
-    'the team.\n'
-).encode()
-ASK_TARGET = PLUGIN_ROOT + ASK_SKILL
+           "Load `shode-house:cook` first.\n")
 
 # erratum 1 §5.8.2 (UD R37 option A). ASCII, <= 200 chars (Cowork).
 TREE_DESCRIPTION = "Shode House: full expert team on Claude Code; skills-only, single session on Cursor."
@@ -154,22 +133,22 @@ CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts, fr
                      "and trusted Python-backed structured-write guards.")
 # erratum 1 §5.8.1 "HOST-NOTES" bullets, persona-free; Antigravity per W0 P4 (agy 1.2.2 validate).
 HOST_BULLETS = (
-    "- Claude Code: `.claude-plugin` manifest, flat skills, agents, the authored commands (`/ask` is the "
+    "- Claude Code: `.claude-plugin` manifest, flat skills, agents; no commands (`/shode-house:cook` is the "
     "entry). The router style delegates to native registered agents.\n"
-    "- Codex: the `ask` skill coordinates genuine separate workers using the six generated role contracts. "
+    "- Codex: the `cook` skill coordinates genuine separate workers using the six generated role contracts. "
     "After the user trusts the hooks and Python 3 is available, lifecycle hooks restore context after compaction "
     "and guard direct structured writes. Hook text is not "
     "authentication; shell commands and per-role model, tool and scope isolation stay ADVISORY-ONLY.\n"
     "- Cursor: skills run in one session; there is no verified router. Never replace "
     "delegation with role-play or claim independent review without a genuine separate worker.\n"
-    "- On hosts without the router style the safety floor is in the `ask` skill (other shode-house skills "
+    "- On hosts without the router style the safety floor is in the `cook` skill (other shode-house skills "
     "point to it). Keep the host's own command approval and sandbox enabled for shell and MCP actions.\n"
     "- Main-tree manifests: root portable `plugin.json`, `.codex-plugin` compatibility fallback and `.cursor-plugin`. "
     "The portable manifest carries the OpenAI hook extension; Antigravity uses the separate "
     "`plugins/shode-house-antigravity` host artifact without that extension.\n"
 )
 ANTIGRAVITY_HOST_BULLETS = (
-    "- Antigravity: portable root manifest, the same six role contracts and 20 skills. Use `ask` as the entry.\n"
+    "- Antigravity: portable root manifest, the same six role contracts and 20 skills. Use `cook` as the entry.\n"
     "- This artifact excludes Codex manifests and lifecycle hooks. Skill discovery alone does not prove separate-worker "
     "delegation; if unavailable, report team execution BLOCKED instead of role-playing workers.\n"
     "- Keep the host's own command approval and sandbox enabled for shell and MCP actions.\n"
@@ -347,7 +326,7 @@ def floor_blocks(text, name=""):
 def style_floor_block(source_entries):
     """The style floor of FLOOR_STYLE, markers included (an empty pair while pending, §5.8.1 item 4)."""
     if FLOOR_STYLE not in source_entries:
-        raise ValueError(f"{FLOOR_STYLE} missing: the ask skill's floor has no source")
+        raise ValueError(f"{FLOOR_STYLE} missing: the cook skill's floor has no source")
     blocks = [b for b in floor_blocks(source_entries[FLOOR_STYLE].decode(), FLOOR_STYLE)
               if b.strip().startswith(STYLE_FLOOR[0])]
     if len(blocks) != 1:
@@ -363,7 +342,7 @@ def preloaded(source_entries):
             header, _ = frontmatter(body.decode(), path)
             for line in header.splitlines():
                 if line.startswith("skills:"):
-                    # Fail closed (Sentinel W2 S2): `skills: [ask, x]` and the block-list form are valid YAML
+                    # Fail closed (Sentinel W2 S2): `skills: [cook, x]` and the block-list form are valid YAML
                     # the host would preload, but a lenient parse would miss them. Only the JSON-style
                     # quoted single-line list (the CI #13 form) is understood; anything else is refused.
                     try:
@@ -383,13 +362,10 @@ def skill_footer(bucket, name, pointer):
     return ("\n" + RESOLVE +
             "Resolve paths beginning ./ or ../ from this file's own directory; resolve other relative file names "
             f"in this skill under this plugin's knowledge/skills/{bucket}/{name}/ "
-            "directory.\n" + (AUTHORITY_ASK if name == "ask" else AUTHORITY) + (POINTER if pointer else ""))
+            "directory.\n" + (AUTHORITY_ENTRY if name == "cook" else AUTHORITY) + (POINTER if pointer else ""))
 
 
 AGENT_FOOTER = "\n" + RESOLVE
-# Sentinel W2 S1: Antigravity converts commands to skills, so every published command except the `/ask`
-# wrapper (which IS the entry) carries the pointer line too.
-COMMAND_FOOTER = "\n" + RESOLVE + POINTER
 
 
 def collect(root=ROOT):
@@ -405,7 +381,7 @@ def collect(root=ROOT):
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?", manifest["version"]):
         raise ValueError("invalid version")
     entries = {}
-    roots = [root / "agents", root / "references", root / "output-styles", root / "commands"]
+    roots = [root / "agents", root / "references", root / "output-styles"]
     roots += [root / "skills" / bucket for bucket in BUCKETS]
     for folder in roots:
         if not folder.is_dir() or folder.is_symlink():
@@ -418,7 +394,7 @@ def collect(root=ROOT):
             if not path.resolve().is_relative_to(root):
                 raise ValueError("source escapes repository")
             entries[path.relative_to(root).as_posix()] = path.read_bytes()
-    for name in ("commands/ask.md", "LICENSE"):
+    for name in ("LICENSE",):
         path = root / name
         if path.is_symlink():
             raise ValueError(f"symlink not allowed: {name}")
@@ -447,7 +423,7 @@ def roles_and_skills(source_entries):
     skills = sorted(p for p in source_entries if p.endswith("/SKILL.md"))
     names = {Path(r).stem for r in roles}
     if names != ROLES or len(skills) != 20:
-        raise ValueError(f"candidate must ship exactly the {len(ROLES)} roles {sorted(ROLES)} and the 20 skills (incl. ask); "
+        raise ValueError(f"candidate must ship exactly the {len(ROLES)} roles {sorted(ROLES)} and the 20 skills (incl. cook); "
                          f"found roles {sorted(names)}, {len(skills)} skills")
     return roles, skills
 
@@ -469,11 +445,9 @@ def generate(name, source, source_entries, pointer_set):
         raise ValueError("\n  ".join(problems))
     if name.startswith("agents/"):
         return rewrite(text, name) + AGENT_FOOTER
-    if name.startswith("commands/"):
-        return rewrite(text, name) + COMMAND_FOOTER
     bucket, skill = Path(name).parts[1], Path(name).parent.name
     footer = skill_footer(bucket, skill, skill in pointer_set)
-    if skill != "ask":
+    if skill != "cook":
         return rewrite(text, name) + footer
     header, rest = frontmatter(text, name)
     # §5.8.1 item 2: the block goes directly after the frontmatter, separated by one blank line.
@@ -487,7 +461,7 @@ def payload(root=ROOT):
     # the target of every footer). Native discovery requires flat skills/<name>/SKILL.md.
     entries = {"knowledge/" + name: body for name, body in source_entries.items()}
     preload = preloaded(source_entries)
-    pointer_set = {Path(p).parent.name for p in skills} - preload - {"ask"}
+    pointer_set = {Path(p).parent.name for p in skills} - preload - {"cook"}
     for name in [*roles, *skills]:
         target = name if name in roles else "skills/" + Path(name).parent.name + "/SKILL.md"
         if target in entries:
@@ -506,14 +480,6 @@ def payload(root=ROOT):
         raise ValueError("authored commands differ from PUBLISHED_COMMANDS: "
                          f"{authored} != {sorted(PUBLISHED_COMMANDS)} -- publishing a command is a "
                          "deliberate decision; add or remove it in PUBLISHED_COMMANDS")
-    # Commands: the authored body verbatim + footer (it carries its own `$ARGUMENTS`). ask.md keeps
-    # its hand-written wrapper, which enters through the floor-carrying tree ask skill.
-    for name in sorted(p for p in source_entries
-                       if p.startswith("commands/") and p.endswith(".md") and p != "commands/ask.md"):
-        if name in entries:
-            raise ValueError(f"duplicate discovery path: {name}")
-        entries[name] = generate(name, source_entries[name], source_entries, pointer_set).encode()
-    entries["commands/ask.md"] = ASK_WRAPPER
     entries["LICENSE"] = source_entries["LICENSE"]
     # Codex hooks use an explicit compatibility-manifest path, never hooks/hooks.json,
     # so Claude's automatic hook discovery and behavior remain unchanged.
@@ -521,14 +487,13 @@ def payload(root=ROOT):
     manifest = {key: manifest[key] for key in
                 ("name", "version", "author", "homepage", "repository", "license")}
     manifest.update(description=TREE_DESCRIPTION,
-                    skills="./skills/",
-                    commands=sorted("./" + name for name in entries if name.startswith("commands/")))
+                    skills="./skills/")
     entries[".claude-plugin/plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
     codex = {key: manifest[key] for key in
              ("name", "version", "author", "homepage", "repository", "license")}
     codex.update(description=CODEX_DESCRIPTION, skills="./skills/",
                  hooks="./codex-hooks/hooks.json",
-                 extensions={"com.openai": {"onboardingSkill": "./skills/ask/SKILL.md"}}, interface={
+                 extensions={"com.openai": {"onboardingSkill": "./skills/cook/SKILL.md"}}, interface={
         "displayName": "Shode House",
         "shortDescription": "The full software-house expert team",
         "longDescription": CODEX_DESCRIPTION,
@@ -550,7 +515,7 @@ def payload(root=ROOT):
         "skills": "./skills/",
         "extensions": {"com.openai": {
             "hooks": "./codex-hooks/hooks.json",
-            "onboardingSkill": "./skills/ask/SKILL.md",
+            "onboardingSkill": "./skills/cook/SKILL.md",
             "interface": codex["interface"],
         }},
     }
@@ -565,15 +530,15 @@ def unified_payload(root=ROOT):
     # Agent frontmatter is kept verbatim, `model:` included (UD R13; W0 P4 confirmed on Claude Code).
     roles = sum(1 for p in entries if p.startswith("knowledge/agents/") and p.endswith(".md"))
     cursor = {key: manifest[key] for key in ("name", "version", "description", "author", "license")}
-    # commands/ask.md uses the Claude command dialect; Cursor gets ask as a skill only.
+    # No commands are published; Cursor gets cook as a skill.
     cursor.update(displayName="Shode House", keywords=["software-house", "agents", "skills"], commands=[])
     entries[".cursor-plugin/plugin.json"] = (json.dumps(cursor, indent=2) + "\n").encode()
     entries["HOST-NOTES.md"] = (
         f"# Shode House {version} host notes\n\n"
-        f"All {roles} role sources and 20 skills are preserved under knowledge/. The agent files, skill roots "
-        "and commands at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed "
+        f"All {roles} role sources and 20 skills are preserved under knowledge/. The agent files and skill roots "
+        "at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed "
         "to their knowledge/ copies, plus a generated resolution footer; "
-        "`/ask` is the pinned wrapper of the ask skill. Use ask as the entry.\n\n" + HOST_BULLETS + "\n"
+        "Use cook as the entry.\n\n" + HOST_BULLETS + "\n"
         "Skill discovery does not prove separate workers are available. If delegation is "
         "unavailable, report team execution BLOCKED; never replace it with role-play.\n"
         "No MCP startup is included. Codex lifecycle hooks load only through its explicit manifest.\n"
@@ -611,7 +576,7 @@ def payload_for_host(host, root=ROOT):
 
 
 def _core_problems(path, core, source, name):
-    """`core` (tree text minus footer and the ask block) against its authored source `name`."""
+    """`core` (tree text minus footer and the cook block) against its authored source `name`."""
     found = []
     try:
         tree_segs, src_segs = segments(core, path), segments(source, path)
@@ -686,16 +651,16 @@ def _reference_problems(entries):
 
 
 def _file_problems(path, name, footer, block, entries, source_entries):
-    """One generated agent/skill/command against its source: footer, ask block, core, model, X11."""
+    """One generated agent/skill/command against its source: footer, cook block, core, model, X11."""
     text, source = entries[path].decode("utf-8", "replace"), terminated(source_entries[name].decode("utf-8"))
     if not text.endswith(footer):
         return [f"{path}: does not end with its generated footer"]
     found = []
     core = text[:len(text) - len(footer)]
-    if path == ASK_SKILL:
+    if path == ENTRY_SKILL:
         header, _ = frontmatter(source, name)
         if block in source:
-            found.append(f"{name}: the source ask skill carries the style floor (tree adapter only)")
+            found.append(f"{name}: the source cook skill carries the style floor (tree adapter only)")
         if not core.startswith(header + "\n" + block):
             return found + [f"{path}: the style floor block is not directly after the frontmatter, "
                             f"byte-equal to {FLOOR_STYLE}"]
@@ -718,18 +683,15 @@ def audit(entries, source_entries):
         preload = preloaded(source_entries)
     except ValueError as error:
         return [str(error)]
-    if "ask" in preload:
-        found.append("a role preloads `ask`: the style floor would reach a spawn twice (UD R32)")
-    pointer_set = {Path(p).parent.name for p in skills} - preload - {"ask"}
+    if "cook" in preload:
+        found.append("a role preloads `cook`: the style floor would reach a spawn twice (UD R32)")
+    pointer_set = {Path(p).parent.name for p in skills} - preload - {"cook"}
     generated = {}
     for name in roles:
         generated[name] = (name, AGENT_FOOTER)
     for name in skills:
         bucket, skill = Path(name).parts[1], Path(name).parent.name
         generated["skills/" + skill + "/SKILL.md"] = (name, skill_footer(bucket, skill, skill in pointer_set))
-    for name in source_entries:
-        if name.startswith("commands/") and name.endswith(".md") and name != "commands/ask.md":
-            generated[name] = (name, COMMAND_FOOTER)
     for path, (name, footer) in sorted(generated.items()):
         if path not in entries:
             found.append(f"{path}: missing from the tree")
@@ -738,26 +700,26 @@ def audit(entries, source_entries):
             found += _file_problems(path, name, footer, block, entries, source_entries)
         except ValueError as error:
             found.append(f"{path}: {error}")
-    # The pointer line sits in exactly the derived set (skills) and in every published command but the
-    # `/ask` wrapper (Sentinel W2 S1); the style block nowhere but its carriers.
+    # The pointer line sits in exactly the derived set (skills); the style block nowhere but its carriers.
     for path, body in sorted(entries.items()):
         has = POINTER in body.decode("utf-8", "replace")
         if path.startswith("skills/") and path.endswith("/SKILL.md"):
             if has != (Path(path).parent.name in pointer_set):
                 found.append(f"{path}: pointer line {'present' if has else 'missing'}; "
-                             f"derived set = skills neither preloaded nor ask")
-        elif re.fullmatch(r"commands/[^/]+\.md", path):
-            if has != (path != "commands/ask.md"):
-                found.append(f"{path}: pointer line {'present' if has else 'missing'}; "
-                             f"every published command except the /ask wrapper carries it")
+                             f"derived set = skills neither preloaded nor cook")
         if not FLOOR_CARRIERS.match(path) and (STYLE_FLOOR[0].encode() in body or BODY_FLOOR[0].encode() in body):
             found.append(f"{path}: carries a floor block outside the floor carriers")
-    # `/ask`: the hand-written wrapper of the tree ask skill, never repointed (E1-1).
-    wrapper = entries.get("commands/ask.md", b"")
-    if wrapper != ASK_WRAPPER:
-        found.append("commands/ask.md: the /ask wrapper changed (must stay the tree ask-skill wrapper)")
-    if ASK_TARGET.encode() not in wrapper or b"knowledge/" in wrapper or ASK_SKILL not in entries:
-        found.append(f"commands/ask.md: must resolve to {ASK_TARGET} (the floor carrier), not a knowledge/ copy")
+    # `cook` is the single public entry: a skill, never a command, a wrapper or an adapter, and no tree path
+    # is named ask (the retired entry; 4.2.0 rename).
+    if ENTRY_SKILL not in entries:
+        found.append(f"{ENTRY_SKILL}: the entry skill is missing from the tree")
+    for path in sorted(entries):
+        if path.startswith("commands/"):
+            found.append(f"{path}: the tree publishes no commands (cook is the single entry)")
+        if "ask" in path.split("/") or Path(path).stem == "ask":  # tombstone-allow
+            found.append(f"{path}: a tree path named ask (the entry is `cook`; no alias, wrapper or adapter)")
+    if "commands" in json.loads(entries.get(".claude-plugin/plugin.json", b"{}")):
+        found.append(".claude-plugin/plugin.json: a `commands` list (cook is the single entry; no commands)")
     # Host statements (§5.8.2) where the tree has them.
     descriptions = {
         ".claude-plugin/plugin.json": TREE_DESCRIPTION,

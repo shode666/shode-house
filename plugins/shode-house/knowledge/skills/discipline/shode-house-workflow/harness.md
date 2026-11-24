@@ -24,7 +24,7 @@ for task status/dependencies, requirements, decisions and evidence. Reuse a reco
 confirmation. Beads, Jira, Redmine or other systems are choices, not prerequisites;
 Markdown is the fallback for every concern. Do not install or migrate a tracker to
 make the workflow run. ใช้ source of truth ที่ user ระบุไว้แล้ว; ถ้ายังไม่ยืนยันถามครั้งเดียวพร้อม Markdown fallback.
-ไม่มี `harness-contract` marker ไม่ใช่เหตุให้หยุดหรือบังคับ `/init`; reuse ของเดิมและเติมเฉพาะ context ที่ขาดในขอบเขตที่อนุญาต ไม่สร้าง runner/config ทับ project. Preserve canonical IDs and store only pointers in other homes.
+ไม่มี `harness-contract` marker ไม่ใช่เหตุให้หยุดหรือบังคับ `cook init`; reuse ของเดิมและเติมเฉพาะ context ที่ขาดในขอบเขตที่อนุญาต ไม่สร้าง runner/config ทับ project. Preserve canonical IDs and store only pointers in other homes.
 If the selected service is unavailable, mark local Markdown updates pending sync;
 do not claim the remote issue changed. Reconcile before subsequent external writes.
 

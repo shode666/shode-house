@@ -18,7 +18,7 @@ BUCKETS = ("workflow", "ops", "ui", "style", "discipline")
 # v3.17 merge 24 -> 20 (no stub). THE single retired-names list: retired baseline path -> file that now
 # owns its content. tests/test_tombstone.py (CI gate #11 tombstone) derives its patterns from these keys.
 RETIRED = {
-    "skills/workflow/meeting/SKILL.md": "skills/workflow/ask/SKILL.md",  # tombstone-allow
+    "skills/workflow/meeting/SKILL.md": "skills/workflow/cook/SKILL.md",  # tombstone-allow
     "skills/discipline/shode-house-evidence/SKILL.md": "skills/discipline/shode-house-discipline/SKILL.md",  # tombstone-allow
     "skills/discipline/shode-house-broadcast/SKILL.md": "skills/discipline/shode-house-discipline/handoff.md",  # tombstone-allow
     "skills/discipline/shode-house-drift/SKILL.md": "skills/discipline/shode-house-workflow/drift.md",  # tombstone-allow
@@ -54,6 +54,9 @@ RENAMED = {
     "references/runbooks/oliver-engagement.md": "references/runbooks/router-engagement.md",
     "references/runbooks/uma-phase-1b.md": "references/runbooks/design-phase-1b.md",
     "references/runbooks/uma-phase-3a.md": "references/runbooks/design-phase-3a.md",
+    # 4.2.0 (shode-house-wy5): the entry skill named ask became `cook` (the baseline never shipped it: it came after 3.15);
+    # no alias, wrapper or stub. tests/test_tombstone.py scans this skill key too.
+    "skills/workflow/ask/SKILL.md": "skills/workflow/cook/SKILL.md",  # tombstone-allow
 }
 
 
@@ -80,7 +83,7 @@ def check(package):
     with zipfile.ZipFile(package) as archive:
         files = {item.filename: item for item in archive.infolist() if not item.is_dir()}
         missing = sorted(required - files.keys())
-        resurrected = sorted(set(RETIRED) & files.keys())
+        resurrected = sorted((set(RETIRED) | set(RENAMED)) & files.keys())
         empty = sorted(p for p in required & files.keys() if files[p].file_size == 0)
         mismatched = []
         # Reading every required member checks its CRC as well as presence.

@@ -27,7 +27,7 @@ REQUIRED-BEFORE: spec_axis_verdict
 3. ปิดท้าย 1 บรรทัด: จำนวน finding ต่อแกน + ตัวแย่สุด **ในแต่ละแกน** — ห้ามเลือกผู้ชนะข้ามแกน
 4. ไม่มี spec → ยัง dispatch Spec axis (ห้าม SKIP) แล้วคืน **`BLOCKED: no-spec`** ("no spec available") ใน report — acceptance ขาด ไม่ใช่ pass เงียบ ๆ
 5. The router records `[REVIEW DISPATCH CARD]` in the checkpoint/report: `shode-house:plan` (spec axis) = DISPATCH, always
-   (no SKIP). See `commands/review.md` § Step 1; verify the actual separate
+   (no SKIP). See `references/workflows/review.md` § Step 1; verify the actual separate
    assignment, not whether a ceremonial card was printed.
 
 **Routing**: approved spec ถูกแต่ implementation ขาด/ผิด/เกิน scope → Phase 2 (`build`); spec/AC เองผิดหรือขาด decision → Phase 1a (`plan`). ห้ามเปลี่ยน spec เพื่อให้ incomplete implementation ผ่าน

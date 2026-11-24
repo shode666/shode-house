@@ -1,7 +1,7 @@
 """Codex-native packaging, coordinator, and lifecycle-hook contract.
 
 These tests deliberately exercise public seams: the generated plugin archive, the
-ask skill Codex loads, and hook stdin/stdout.  They do not claim per-role tool or
+cook skill Codex loads, and hook stdin/stdout.  They do not claim per-role tool or
 model isolation; Codex currently supplies one tool set to the native agent tree.
 """
 import importlib.util
@@ -35,7 +35,7 @@ class CodexPackageTest(unittest.TestCase):
         self.assertIn("plugin.json", main)
         self.assertNotIn(".codex-plugin/plugin.json", antigravity)
         self.assertFalse(any(name.startswith("codex-hooks/") for name in antigravity))
-        self.assertEqual(main["skills/ask/SKILL.md"], antigravity["skills/ask/SKILL.md"])
+        self.assertEqual(main["skills/cook/SKILL.md"], antigravity["skills/cook/SKILL.md"])
         self.assertNotIn("extensions", json.loads(antigravity["plugin.json"]))
         self.assertIn("Antigravity", json.loads(antigravity["plugin.json"])["description"])
         self.assertEqual(antigravity, pack.payload_for_host("antigravity")[1])
@@ -55,7 +55,7 @@ class CodexPackageTest(unittest.TestCase):
         _, entries = pack.unified_payload()
         intentional = {
             ".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", "plugin.json", "HOST-NOTES.md",
-            "skills/ask/SKILL.md", "knowledge/skills/workflow/ask/SKILL.md",
+            "skills/cook/SKILL.md", "knowledge/skills/workflow/cook/SKILL.md",
             "agents/verify.md", "knowledge/agents/verify.md",  # remove inherited trailing whitespace
             "knowledge/references/state-machine/rework-routing.json",
             "knowledge/references/design-intel/scripts/design_run.py",
@@ -64,6 +64,25 @@ class CodexPackageTest(unittest.TestCase):
             "knowledge/references/runbooks/design-phase-3a.md",
             "knowledge/references/runbooks/verify-runtime.md",
             "knowledge/skills/ui/ui-test/SKILL.md", "skills/ui-test/SKILL.md",
+            # 4.2.0 (shode-house-wy5): the entry skill ask became `cook`; the pointer line of every skill neither preloaded
+            # nor cook names `shode-house:cook`; the Codex SessionStart text names the cook router.
+            "codex-hooks/session_context.py",
+            *("skills/%s/SKILL.md" % n for n in (
+                "api-contract", "automate-test", "caveman", "data-migration", "decompose", "dev-gate", "diagnose",
+                "domain-core", "drain", "incident", "secure", "shode-house-routing", "shode-house-workflow", "slo",
+                "ui-test", "web-q")),
+            # 4.2.0: the slash commands left the text of these sources (they name the cook workflows instead).
+            *("knowledge/" + n for n in (
+                "references/runbooks/router-engagement.md", "references/scope-lock.md", "references/scope/README.md",
+                "skills/discipline/review-checklist/intake.md", "skills/discipline/review-checklist/security-sentinel.md",
+                "skills/discipline/review-checklist/spec-axis.md", "skills/discipline/shode-house-routing/SKILL.md",
+                "skills/discipline/shode-house-routing/orchestration.md", "skills/discipline/shode-house-workflow/SKILL.md",
+                "skills/discipline/shode-house-workflow/harness.md", "skills/discipline/shode-house-workflow/wayfinding.md",
+                "skills/workflow/decompose/SKILL.md", "skills/workflow/dev-gate/quality-gates.md")),
+            # 4.2.0 removals: no commands/, no command copies under knowledge/, the former entry skill (renamed cook; no alias).
+            *("commands/%s.md" % n for n in ("ask", "consult", "design-system", "implement", "init", "review")),  # tombstone-allow
+            *("knowledge/commands/%s.md" % n for n in ("ask", "consult", "design-system", "implement", "init", "review")),  # tombstone-allow
+            "knowledge/skills/workflow/ask/SKILL.md", "skills/ask/SKILL.md",  # tombstone-allow
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(
@@ -84,7 +103,7 @@ class CodexPackageTest(unittest.TestCase):
         codex = json.loads(entries[".codex-plugin/plugin.json"])
         claude = json.loads(entries[".claude-plugin/plugin.json"])
 
-        self.assertEqual("./skills/ask/SKILL.md", codex["extensions"]["com.openai"]["onboardingSkill"])
+        self.assertEqual("./skills/cook/SKILL.md", codex["extensions"]["com.openai"]["onboardingSkill"])
         self.assertEqual("./codex-hooks/hooks.json", codex["hooks"])
         self.assertNotIn("skills-only", codex["description"])
         self.assertIn("Codex", codex["description"])
@@ -93,7 +112,7 @@ class CodexPackageTest(unittest.TestCase):
         portable = json.loads(entries["plugin.json"])
         openai = portable["extensions"]["com.openai"]
         self.assertEqual("./codex-hooks/hooks.json", openai["hooks"])
-        self.assertEqual("./skills/ask/SKILL.md", openai["onboardingSkill"])
+        self.assertEqual("./skills/cook/SKILL.md", openai["onboardingSkill"])
         self.assertNotIn("hooks/hooks.json", entries)  # would be auto-discovered by Claude too
         for name in ("codex-hooks/hooks.json", "codex-hooks/session_context.py",
                      "codex-hooks/pre_tool_use.py"):
@@ -113,15 +132,15 @@ class CodexPackageTest(unittest.TestCase):
 
     def test_ask_is_a_real_codex_coordinator_when_native_delegation_exists(self):
         _, entries = pack.unified_payload()
-        ask = entries["skills/ask/SKILL.md"].decode()
-        self.assertNotIn("team execution needs the router style (Claude Code)", ask)
-        self.assertIn("genuine separate-worker delegation", ask)
-        self.assertIn("one axis per fresh worker", ask)
-        self.assertIn("SHODE_CODEX_HOOKS=ACTIVE", ask)
-        self.assertIn("ADVISORY-ONLY", ask)
+        cook = entries["skills/cook/SKILL.md"].decode()
+        self.assertNotIn("team execution needs the router style (Claude Code)", cook)
+        self.assertIn("genuine separate-worker delegation", cook)
+        self.assertIn("one axis per fresh worker", cook)
+        self.assertIn("SHODE_CODEX_HOOKS=ACTIVE", cook)
+        self.assertIn("ADVISORY-ONLY", cook)
         for role in ("plan", "build", "verify", "operate", "secure", "design"):
-            self.assertIn(f"`{role}`", ask)
-        self.assertRegex(ask, r"standards, spec, runtime,\s*security, domain and UI")
+            self.assertIn(f"`{role}`", cook)
+        self.assertRegex(cook, r"standards, spec, runtime,\s*security, domain and UI")
 
 
 class CodexHookRuntimeTest(unittest.TestCase):
@@ -143,7 +162,7 @@ class CodexHookRuntimeTest(unittest.TestCase):
         context = body["hookSpecificOutput"]["additionalContext"]
         self.assertIn("SHODE_CODEX_HOOKS=ACTIVE", context)
         self.assertIn("not an authentication signal", context)
-        self.assertIn("shode-house:ask", context)
+        self.assertIn("shode-house:cook", context)
         self.assertIn("compaction", context.lower())
 
     def test_pre_tool_hook_denies_control_plane_and_git_patch_targets(self):

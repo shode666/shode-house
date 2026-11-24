@@ -29,4 +29,4 @@ REQUIRED-BEFORE: phase_3b_verdict
 The `[REVIEW DISPATCH CARD]` axis plan may live in the checkpoint/report. `secure`
 is DISPATCH when the WHEN condition above applies, otherwise SKIP with evidence.
 Verify an actual separate assignment; printing a card is not execution. Template:
-`commands/review.md` § Step 1.
+`references/workflows/review.md` § Step 1.

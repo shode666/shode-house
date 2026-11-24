@@ -209,6 +209,10 @@ def shipped_names(plugin_root):
             for bucket in buckets:
                 if bucket.name in NOT_SHIPPED_BUCKETS or not bucket.is_dir(follow_symlinks=False):
                     continue
+                # flat tree layout: skills/<name>/SKILL.md (the generated tree; a bucket dir is the skill)
+                st = lstat_or_none(os.path.join(bucket.path, "SKILL.md"))
+                if st is not None and stat.S_ISREG(st.st_mode):
+                    skills.add(_fold(bucket.name))
                 with os.scandir(bucket.path) as items:
                     for item in items:
                         st = lstat_or_none(os.path.join(item.path, "SKILL.md"))
@@ -350,7 +354,7 @@ def run_scan(project_root, plugin_root):
     if not stat.S_ISDIR(st.st_mode):
         return scan
     for step in (lambda: scan_skills(scan, claude_dir, skills),
-                 lambda: scan_commands(scan, claude_dir, commands),
+                 lambda: scan_commands(scan, claude_dir, commands | skills),   # a project command shadows a same-named skill entry too
                  lambda: scan_styles(scan, claude_dir, styles),
                  lambda: scan_settings(scan, claude_dir, styles)):
         if scan.out_of_time():

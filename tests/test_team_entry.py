@@ -100,7 +100,11 @@ V4_REWRITTEN = dict(V4_ROSTER, **{
     # A8 (tests/test_skill_names.py) reads a backticked agent type after a load verb ("Lazy-load") as a skill load
     "- **Lazy-load**: Dave": ("- **Lazy-load**: build agent อ่าน `references/languages/<lang>.md` เฉพาะภาษาที่ใช้; skill โหลดเมื่อ trigger เท่านั้น",),
     # pointer re-aimed: the orchestrator Harness Contract section is retired
-    "long run = หลาย bd ต่อเนื่อง.": ("long run = หลาย bd ต่อเนื่อง. enforce ด้วย harness contract (ดู `/init` rule 11 + "
+    # 4.2.0 (shode-house-wy5): the retired slash commands are named by their cook workflow; the whole new line is pinned
+    "> T-shirt = **internal signal**": (
+        "> T-shirt = **internal signal** สำหรับ router decide parallel vs sequential delegation. **ห้ามใช้เป็น time estimate ส่งให้ user** "
+        "(per `shode-house-discipline/main-session.md` § No Man-Day). ถ้า user explicit ขอ effort → ใช้ `cook spec --estimate`.",),
+    "long run = หลาย bd ต่อเนื่อง.": ("long run = หลาย bd ต่อเนื่อง. enforce ด้วย harness contract (ดู `cook init` rule 11 + "
                                        "`shode-house-workflow/harness.md`):",),
 })
 
@@ -139,7 +143,7 @@ def entry_errors(entry, contents):
                 errors.append("missing prerequisite: " + role + ": " + name)
     # Validate the new entry's literal relative resource pointers.
     for relative in re.findall(r"`(\.\./[^`]+\.md)`", entry):
-        path = (ROOT / "skills/workflow/ask" / relative).resolve()
+        path = (ROOT / "skills/workflow/cook" / relative).resolve()
         try:
             key = str(path.relative_to(ROOT))
         except ValueError:
@@ -246,6 +250,9 @@ class TeamEntryTest(unittest.TestCase):
                 "| Code touches frontend | → `ui-test` | E2E + visual + a11y automation |",
             "| Hand-off Phase 2 → 3b review | → `review-checklist` skill | Chris 7-dim + Quinn integration matrix (used by /implement Phase 3b + /review)":
                 "| Hand-off Phase 2 → 3b review | → `shode-house:review-checklist` skill | Chris 7-dim + Quinn integration matrix",
+            # 4.2.0 (shode-house-wy5): the retired /review command is named by its cook workflow
+            "- `grep -rn 'shortcut(bd' .` / `/review --debt` รวบเป็น ledger → \"later\" ไม่กลาย \"never\"":
+                "- `grep -rn 'shortcut(bd' .` / `cook review --debt` รวบเป็น ledger → \"later\" ไม่กลาย \"never\"",
             # v4 W7 (ADR iter5 §7 W7 "namespaced loads"): the load names the plugin skill, the line is otherwise kept
             "- **Production hot-fix P0/P1** — ใช้ `incident` skill ก่อน; dev-gate ตามมาตอน follow-up fix":
                 "- **Production hot-fix P0/P1** — ใช้ `shode-house:incident` skill ก่อน; dev-gate ตามมาตอน follow-up fix",
@@ -431,7 +438,7 @@ class TeamEntryTest(unittest.TestCase):
             for base in [ROOT / "agents", *[ROOT / "skills" / b for b in inventory.BUCKETS]]
             for p in base.rglob("*.md")
         }
-        cls.entry = cls.contents["skills/workflow/ask/SKILL.md"]
+        cls.entry = cls.contents["skills/workflow/cook/SKILL.md"]
 
     def test_all_baseline_roles_and_prerequisites_reachable(self):
         self.assertEqual([], entry_errors(self.entry, self.contents))

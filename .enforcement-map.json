@@ -797,14 +797,14 @@
     },
     {
       "id": "decompose-no-spec-route",
-      "rule": "Decompose stop: no spec yet → /design-system (business-analyst ∥ solution-architect) first",
+      "rule": "Decompose stop: no spec yet → cook spec (business-analyst ∥ solution-architect) first",
       "owner": "router",
       "trigger": "before decomposing",
       "preload": false,
       "root_only": true,
       "source_of_truth": "skills/workflow/decompose/SKILL.md",
       "verification": "ci:21 + ci:24c + test_root_safety_anchors",
-      "anchor": "ยังไม่มี spec → `/design-system`"
+      "anchor": "ยังไม่มี spec → `cook spec`"
     },
     {
       "id": "drain-ready-set-verified",
@@ -1407,7 +1407,7 @@
       "trigger": "small task / depth decision",
       "preload": false,
       "root_only": true,
-      "source_of_truth": "skills/workflow/ask/SKILL.md",
+      "source_of_truth": "skills/workflow/cook/SKILL.md",
       "verification": "ci:21 + test_root_safety_anchors",
       "anchor": "single-file deterministic fix · clear behaviour · no architecture change · no domain decision · no security boundary. One unknown → full workflow."
     },
@@ -1418,7 +1418,7 @@
       "trigger": "fast path chosen",
       "preload": false,
       "root_only": true,
-      "source_of_truth": "skills/workflow/ask/SKILL.md",
+      "source_of_truth": "skills/workflow/cook/SKILL.md",
       "verification": "ci:21 + test_root_safety_anchors",
       "anchor": "Fast path still enforces evidence + R0/R1/R2 + Stop-and-return + the Phase 1c trigger; it never drops a triggered role or a gate."
     },
@@ -1429,7 +1429,7 @@
       "trigger": "depth decision",
       "preload": false,
       "root_only": true,
-      "source_of_truth": "skills/workflow/ask/SKILL.md",
+      "source_of_truth": "skills/workflow/cook/SKILL.md",
       "verification": "ci:21 + test_root_safety_anchors",
       "anchor": "new product behaviour · architecture decision · cross-domain impact · large feature · security-sensitive change (= a Phase 1c trigger) · significant UI flow · complex migration · multi-service contract · production deployment"
     },

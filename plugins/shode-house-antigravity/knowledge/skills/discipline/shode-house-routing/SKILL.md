@@ -106,7 +106,7 @@ trade/order/exchange/FIX → `plan` with the trading domain reference
 
 ## 📏 T-shirt (🔴 internal routing heuristic only, ไม่ส่งต่อ user)
 
-> T-shirt = **internal signal** สำหรับ router decide parallel vs sequential delegation. **ห้ามใช้เป็น time estimate ส่งให้ user** (per `shode-house-discipline/main-session.md` § No Man-Day). ถ้า user explicit ขอ effort → ใช้ `/design-system --estimate`.
+> T-shirt = **internal signal** สำหรับ router decide parallel vs sequential delegation. **ห้ามใช้เป็น time estimate ส่งให้ user** (per `shode-house-discipline/main-session.md` § No Man-Day). ถ้า user explicit ขอ effort → ใช้ `cook spec --estimate`.
 
 Relative scale (no time anchor):
 - **XS** = trivial atomic change (one-line tweak / typo)

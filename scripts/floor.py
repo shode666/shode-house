@@ -25,11 +25,11 @@ Usage (run from the repo root, or pass --root):
                      starts with "safety floor (" or "r0 (irreversible:". Any one form is enough (fail-closed
                      union: a decoding is added as a view, never replacing one; Sentinel W10a fix2 B2).
                      Invisible = Unicode Cf plus every Default_Ignorable_Code_Point (F3).
-                     The style floor also targets the generated plugins/*/skills/ask/SKILL.md adapter.
+                     The style floor also targets the generated plugins/*/skills/cook/SKILL.md entry skill.
                      Not yet required (plugin.json major < 4 and SHODE_REQUIRE_V4 != 1, no --require): a file
                      with no markers or an empty marker pair is reported as pending, not red.
                      Required: every copy must carry the floor, and every source and generated pattern must
-                     match at least one file (a missing plugins/ tree or ask adapter is red).
+                     match at least one file (a missing plugins/ tree or cook entry skill is red).
   floor.py --write   writes the canonical block between EXISTING markers in source files only (agents/,
                      output-styles/). It never inserts markers and never touches plugins/ (the packer copies).
 Exit: 0 ok, 1 check or write failed, 2 canonical file invalid or bad usage.
@@ -41,11 +41,11 @@ Kind = namedtuple('Kind', 'name canonical begin end sources generated')
 KINDS = (
     Kind('body', '.safety-floor/body.md', '<!-- floor:begin -->', '<!-- floor:end -->',
          ('agents/*.md',), ('plugins/*/agents/*.md', 'plugins/*/knowledge/agents/*.md')),
-    # the generated tree's `ask` adapter carries the style floor for skills-only hosts (ADR erratum 1 §5.8.1);
+    # the generated tree's `cook` entry skill carries the style floor for skills-only hosts (ADR erratum 1 §5.8.1);
     # the packer (W2) inserts it, so until then the adapter is pending like any copy without markers
     Kind('style', '.safety-floor/style.md', '<!-- floor:style:begin -->', '<!-- floor:style:end -->',
          ('output-styles/*.md',), ('plugins/*/output-styles/*.md', 'plugins/*/knowledge/output-styles/*.md',
-                                   'plugins/*/skills/ask/SKILL.md')),
+                                   'plugins/*/skills/cook/SKILL.md')),
 )
 # "floor elsewhere": a floor marker in any other shipped file is red in both modes -- the floor never sits in a
 # preloaded skill root (the discipline root reaches every spawn) or any other text it was not hashed for
@@ -277,7 +277,7 @@ def check(root, required, verbose=False):
     fail = pending = ok = 0
     for rel, why in elsewhere(root):
         print(f'  X {rel}: {why} (floor elsewhere) -- the floor lives only in agent bodies, output styles and '
-              f'the generated ask adapter')
+              f'the generated cook entry skill')
         fail += 1
     for kind in KINDS:
         other = next(k for k in KINDS if k is not kind)

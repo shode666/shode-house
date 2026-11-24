@@ -38,7 +38,7 @@ Every mode: **R0 (irreversible) always asks first.**
 - **Output**: STRIDE + abuse case + security AC injected into Phase 1a
 - **Gate**: `pre-implement` — may block Phase 2 until it passes
 - **Note**: may run parallel with 1b when scopes are independent
-- Fast path vs full-workflow trigger → `ask` § Fast path or full workflow (single owner); fast path never skips this trigger.
+- Fast path vs full-workflow trigger → `cook` § Fast path or full workflow (single owner); fast path never skips this trigger.
 - 🔴 **No waiver**: a user's or agent's "low risk" claim does not waive Phase 1c when a trigger fired. ห้าม dispatch Phase 2 ก่อน Phase 1c gate ผ่าน
 
 ## ⏸️ Approval Gates
@@ -170,4 +170,4 @@ M1 → `shode-house-discipline` § M1 — Ingress Guard; เมื่อ drift �
 Resolve source-root paths beginning agents/, skills/, references/, commands/ or output-styles/ under this plugin's knowledge/ directory, not the user's project.
 Resolve paths beginning ./ or ../ from this file's own directory; resolve other relative file names in this skill under this plugin's knowledge/skills/discipline/shode-house-workflow/ directory.
 Use actual host tools and preserve host/project/user authority.
-No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:ask` first.
+No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:cook` first.

@@ -8,14 +8,14 @@ description: |
 
 # Eval Harness (bias-aware, no-bias evaluation methodology)
 
-> Offline tool. **ไม่** อยู่ใน `/implement` Phase loop. Run โดย **maintainer (offline)** ตอน major release / dispute_rate spike. (Evan evaluator agent = reverted methodology เก็บที่นี่ reference-only, ไม่ ship)
+> Offline tool. **ไม่** อยู่ใน `cook implement` Phase loop. Run โดย **maintainer (offline)** ตอน major release / dispute_rate spike. (Evan evaluator agent = reverted methodology เก็บที่นี่ reference-only, ไม่ ship)
 > **Owner**: Maintainer (offline). Co-pilot: Patrick (consume retro), Stan (cross-team calibration).
 
 ---
 
 ## When NOT to use
 
-- ระหว่าง `/implement` หรือ `/review` — runtime overhead เกินไป + ใช้ token เยอะ (multi-run × 19 agents)
+- ระหว่าง `cook implement` หรือ `cook review` — runtime overhead เกินไป + ใช้ token เยอะ (multi-run × 19 agents)
 - **Spike / one-off feature** — regression test ไม่จำเป็น
 - **Agent ที่เพิ่ง draft** — eval ต้องมี baseline; eval baseline แรกใช้เป็น "stake in ground" ไม่ใช่ pass/fail
 
@@ -236,7 +236,7 @@ Plugin = **หลักการ + วิธีการ** เท่านั้
 
 ## ห้าม
 
-- ห้าม run eval ระหว่าง /implement (offline tool only)
+- ห้าม run eval ระหว่าง cook implement (offline tool only)
 - ห้าม claim "agent bias-free" จาก single-fixture pass — ต้อง ≥5 fixtures + N=5 runs minimum
 - ห้าม use same LLM เป็น subject + judge (self-preference bias)
 - ห้าม share fixture ไป training data (eval leakage → invalidates baseline)

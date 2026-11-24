@@ -12,17 +12,17 @@ data remains proposal-only; accessibility, rendered behavior and tool output rem
 **router** (the plugin's output style `output-styles/shode-house.md`, forced by the plugin): it routes, gates, relays and
 closes. Agents are spawned as `shode-house:<id>`; the 7 domain experts are domain references
 (`references/domain/<domain>.md`) loaded by a `plan` spawn through `domain-core`, not agents. There are 20 skills
-([ask](skills/workflow/ask/SKILL.md) is the entry), and one canonical **safety floor** is copied byte-identical into every
+([cook](skills/workflow/cook/SKILL.md) is the entry), and one canonical **safety floor** is copied byte-identical into every
 agent body and the router style (`scripts/floor.py --check --require`). **Breaking:** the 18 old ids no longer resolve (no
 stub agent files) — see § Migration from 4.0.0 below; the 4.0.1 number was fixed by the maintainer. Claude Code uses the
-router style and native registered agents. Codex structurally packages `ask` as a coordinator for genuine separate workers,
+router style and native registered agents. Codex structurally packages `cook` as a coordinator for genuine separate workers,
 with trusted Python-backed lifecycle hooks for direct structured writes; Cursor remains an unverified one-session adapter and Antigravity packaging
 is a separate artifact. The 4.0.1 routing and review wiring is *designed*, not yet *measured* (see § What is designed vs what is measured).
 
 4.0.0 introduced the router style and the safety floor (the 3.x `orchestrator` agent and the `oliver` style were retired
 there).
 
-3.16.x brought the full software house back ([ask](skills/workflow/ask/SKILL.md) as the single team
+3.16.x brought the full software house back ([cook](skills/workflow/cook/SKILL.md) as the single team
 entrypoint, the original 19 roles and 23 skills, consolidated by v3.17 into 20 skills with no capability
 removed); 3.16.1+ superseded 3.16.0, which shipped a single-skill package without the team.
 
@@ -121,7 +121,7 @@ A model profile may be added later only under the contribution rule in [`AGENTS.
 ## 60-second example
 
 ```
-you   > /shode-house:implement "POST /refund — คืนเงินบางส่วนได้ ห้ามเกินยอดจ่าย"
+you   > /shode-house:cook implement "POST /refund — คืนเงินบางส่วนได้ ห้ามเกินยอดจ่าย"
 
 [router|M1 Ingress Guard|bd-42]
 - classify : new-task   - route : `plan` (requirements mode) ∥ `plan` (architecture mode) (1a) → `plan` with the fintech domain reference (money trigger) → `secure` (1c)
@@ -174,14 +174,14 @@ Package source for every host: `plugins/shode-house` (generated from this repo b
 /plugin marketplace add shode666/shode-house
 /plugin install shode-house@shode-house
 ```
-Entry: `/shode-house:ask <request>` — the router style runs the main session and dispatches the specialists.
+Entry: `/shode-house:cook <request>` — the router style runs the main session and dispatches the specialists. `cook` is the only entry; the former entry and the five commands are gone (4.2.0, BREAKING; old → new table: [CHANGELOG](CHANGELOG.md)).
 Unattended runs (`claude -p`): set `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, otherwise the CLI kills
 reviewers still running after 600 s before the router can integrate their verdicts.
 
 ### Codex
 Add the repo as a plugin marketplace (`.claude-plugin/marketplace.json` is the shared catalog);
 `plugins/shode-house/plugin.json` is the portable manifest; `.codex-plugin/plugin.json` remains its compatibility fallback.
-They register the 20 skills, the `ask` onboarding coordinator and Codex-only lifecycle hooks. Start with `ask`; its
+They register the 20 skills, the `cook` onboarding coordinator and Codex-only lifecycle hooks. Start with `cook`; its
 coordinator contract requires genuine separate workers for the six roles and a fresh worker for each independent review
 axis when the installed host exposes delegation. Live installed-host acceptance is still pending. Codex must
 trust the plugin and Python 3 must be available before hooks run. Hook context reports
@@ -190,7 +190,7 @@ always `ADVISORY-ONLY`; keep Codex approval and sandbox controls enabled.
 
 ### Cursor
 Install from this repository (`.cursor-plugin/marketplace.json` → `plugins/shode-house`).
-Skills are discovered; there is no slash command — invoke the `ask` skill. Cursor has no verified router; `ask` may
+Skills are discovered; there is no slash command — invoke the `cook` skill. Cursor has no verified router; `cook` may
 delegate only when the session exposes genuine separate-worker delegation, otherwise it reports team execution BLOCKED.
 Keep the host's approval on.
 
@@ -234,7 +234,7 @@ Prerequisites: **`jq` is required for hook enforcement** (`brew install jq` / `a
 
 - behavioral invariant 8 ข้อ (NO MAGIC · M1 · M7 · zero-overlap · citation · Anti-Puppet · scope pin · money/PII trigger) ผ่าน 100% ทั้งสองฝั่ง — [`eval/results/3.13-rc1/BEHAVIOR.md`](eval/results/3.13-rc1/BEHAVIOR.md)
 - target เดิม 10–25% **ไม่ผ่าน** — ตั้งบนสมมติฐานว่า plugin คือ context ทั้งหมด ซึ่งไม่จริงใน Cowork (harness คงที่) — [`eval/results/3.13-rc1/COMPARE.md`](eval/results/3.13-rc1/COMPARE.md)
-- 🔴 ข้อจำกัด: 1 run/agent · ยังไม่ได้รัน pipeline เต็มผ่าน `/implement` `/review` — Spec-axis dispatch + AskUserQuestion relay **ยังไม่มี E2E proof** (roadmap Phase B)
+- 🔴 ข้อจำกัด: 1 run/agent · ยังไม่ได้รัน pipeline เต็มผ่าน `cook implement` `cook review` — Spec-axis dispatch + AskUserQuestion relay **ยังไม่มี E2E proof** (roadmap Phase B)
 
 ### static (byte) — full fan-out 19 agent
 
@@ -369,29 +369,34 @@ The main session (router style) runs on the session's own model. A project can f
 
 ---
 
-## ⚡ Slash Commands (6)
+## ⚡ Entry (1) — `cook`
 
-| Command | ใช้เมื่อ |
-|---------|----------|
-| `/shode-house:ask [คำถาม / outcome / continue]` | public entry point — ทำงานกับ router และทั้งทีม (skill [`ask`](skills/workflow/ask/SKILL.md)) |
-| `/shode-house:consult [คำถาม]` | ปรึกษาด่วน — route ไป agent ตัวเดียว |
-| `/shode-house:init [project]` | Init project scaffold — **default**: interactive wizard; `--quick "<stack>"` direct `operate` (deploy mode) Docker-first |
-| `/shode-house:design-system [feature]` | Smart Spec pipeline — **default**: spec → suggest implement; `--stop`: stop at spec; `--estimate`: add T-shirt sizing; `--stop --estimate` = proposal mode |
-| `/shode-house:implement [feature]` | Phase 2-4 — `build` + `design` + `verify` (standards axis) ∥ `verify` (runtime axis) (uses `review-checklist` skill) |
-| `/shode-house:review [path\|jira\|bug]` | Ad-hoc code review (uses `review-checklist` skill) |
+| Entry | ใช้เมื่อ |
+|-------|----------|
+| `/shode-house:cook [คำถาม / outcome / continue]` | the only public entry — ทำงานกับ router และทั้งทีม (skill [`cook`](skills/workflow/cook/SKILL.md)); it selects one workflow by intent |
 
-> **3-flag rule** (AGENTS.md invariant): ห้ามเพิ่ม command ใหม่ถ้า command เดิม + ≤ 3 flag รองรับได้ → prefer flags over command proliferation
+`cook` § Workflow selection routes to five workflow references under `references/workflows/` (they are not commands and have no entry of their own):
+
+| Intent | Workflow | Notes |
+|--------|----------|-------|
+| consult | `references/workflows/consult.md` | ปรึกษาด่วน — route ไป agent ตัวเดียว |
+| init | `references/workflows/init.md` | Init project scaffold — **default**: interactive wizard; `--quick "<stack>"` direct `operate` (deploy mode) Docker-first |
+| spec | `references/workflows/spec.md` | Smart Spec pipeline — **default**: spec → suggest implement; `--stop`: stop at spec; `--estimate`: add T-shirt sizing; `--stop --estimate` = proposal mode |
+| implement | `references/workflows/implement.md` | Phase 2-4 — `build` + `design` + `verify` (standards axis) ∥ `verify` (runtime axis) (uses `review-checklist` skill) |
+| review | `references/workflows/review.md` | Read-only code review (uses `review-checklist` skill); `--debt` harvests deferred shortcuts |
+
+> **4.2.0 BREAKING (no alias window):** the former entry and the five commands (consult, design-system, init, implement, review) were removed with no alias, wrapper or stub; `/shode-house:cook <intent> …` replaces all six (table: [CHANGELOG](CHANGELOG.md)). The other 19 skills remain in the host's skill list; `cook` is the only *entry*.
 
 ---
 
 ## 📚 Skills (20 lazy-load — bucket organized)
 
-**v3.17 (24 → 20, no stub):** four skills were merged into their owners — the team-meeting entry into [`ask`](skills/workflow/ask/SKILL.md), the evidence protocol and the broadcast/handoff protocol into [`shode-house-discipline`](skills/discipline/shode-house-discipline/SKILL.md) (root + `handoff.md`/`reporting.md`), drift defense into [`shode-house-workflow`](skills/discipline/shode-house-workflow/SKILL.md) (root + `drift.md`). Old names are no longer loadable; old → new table: [CHANGELOG](CHANGELOG.md).
+**v3.17 (24 → 20, no stub):** four skills were merged into their owners — the team-meeting entry into [`cook`](skills/workflow/cook/SKILL.md) (named ask until 4.2.0), the evidence protocol and the broadcast/handoff protocol into [`shode-house-discipline`](skills/discipline/shode-house-discipline/SKILL.md) (root + `handoff.md`/`reporting.md`), drift defense into [`shode-house-workflow`](skills/discipline/shode-house-workflow/SKILL.md) (root + `drift.md`). Old names are no longer loadable; old → new table: [CHANGELOG](CHANGELOG.md).
 
 ### `skills/workflow/` — daily process
 | Skill | Owner | Trigger |
 |-------|-------|---------|
-| [`ask`](skills/workflow/ask/SKILL.md) | ALL | **Entry-point** — engage the team + team orientation (discipline card อยู่ที่ router style `output-styles/shode-house.md`) |
+| [`cook`](skills/workflow/cook/SKILL.md) | ALL | **Entry-point** — engage the team + team orientation (discipline card อยู่ที่ router style `output-styles/shode-house.md`) |
 | [`dev-gate`](skills/workflow/dev-gate/SKILL.md) | `build` + `verify` (standards axis) | TDD red-green-refactor + 7-gate quality |
 | [`automate-test`](skills/workflow/automate-test/SKILL.md) | `verify` (runtime axis) + `verify` (standards axis) + `operate` (deploy mode) | CI test pyramid 70/20/10 + threshold |
 | [`diagnose`](skills/workflow/diagnose/SKILL.md) | `verify` (standards axis) + `verify` (runtime axis) + `build` | Bug + perf root cause — เริ่มที่ feedback loop |
@@ -497,7 +502,7 @@ router ▸ Ops   : deploy
 
 ## 💬 Clarifying Style
 
-**`AskUserQuestion` ใช้ได้เฉพาะ main session** (`/init`, `/design-system`, `/implement` และ router ผ่าน `output-styles/shode-house.md`) — sub-agent ทุกตัว **return question bundle** ขึ้นไปให้ main session เปิด popup แล้วเขียนคำตอบกลับ tracker
+**`AskUserQuestion` ใช้ได้เฉพาะ main session** (`cook init`, `cook spec`, `cook implement` และ router ผ่าน `output-styles/shode-house.md`) — sub-agent ทุกตัว **return question bundle** ขึ้นไปให้ main session เปิด popup แล้วเขียนคำตอบกลับ tracker
 
 - option-style 2-4 ตัวเลือก + Recommend ตัวแรก + reason 1 บรรทัด · batch ≤ 4 คำถามต่อ call · ห้ามคำถามเปิด
 - **frontier model**: ถามทั้ง frontier ของ design tree รอบเดียว → คำถามที่ขึ้นกับข้อที่ยังเปิด = รอบถัดไป → จบเมื่อ frontier ว่าง
@@ -541,13 +546,13 @@ shode-house/
 ├── .pack-allowlist             the only list of what `make pack` ships (docs/, AGENTS.md, CLAUDE.md, README, CHANGELOG do not)
 ├── .github/workflows/ci.yml    gate invariant + lint (inline bash + jq; = make validate)
 ├── agents/                     6 agent types: plan · build · verify · operate · secure · design
-├── commands/                   5 slash commands
 ├── output-styles/shode-house.md the router style (forced) ยึด main session
 ├── skills/                     workflow/ ops/ ui/ style/ discipline/  (+ in-progress/ deprecated/ ไม่ ship)
 ├── references/
 │   ├── design-intel/           `design` lookup layer (data + search.py, preload 0 tok)
 │   ├── domain/                 7 domain references (fintech … ecommerce), loaded by `plan` via domain-core
 │   ├── patterns/               durable-agent-runtime.md · general.md
+│   ├── workflows/              5 workflow references (consult · init · spec · implement · review) selected by `cook`
 │   └── languages/<14 files>    per-language best practice (`build` lazy-load)
 ├── eval/                       scenarios · prompts · baseline · results/<version>/
 ├── scripts/                    context-budget.py · rule-conservation.py · usage-from-transcript.py …
@@ -576,7 +581,7 @@ shode-house/
 - Host-level protection for .git (rule syntax per the Claude Code permissions documentation, code.claude.com/docs/en/permissions): hooks protect .git only where they run (not with disableAllHooks, not in the generated tree, unconfirmed in Cowork). To protect it wherever Claude Code itself enforces permissions, add this to the project's .claude/settings.json: {"permissions":{"deny":["Edit(/.git/**)"]}}. One Edit(...) deny rule covers every built-in file-editing tool: Write, Edit and NotebookEdit. In project settings a path that starts with a single '/' is anchored at the project root, and the host checks a rule against both the requested path and the symlink-resolved path. In a linked worktree or a submodule checkout the project's .git is a FILE, not a directory; add "Edit(/.git)" next to it so the pointer file itself is covered (the same anchored path form). A linked worktree, a submodule or a --separate-git-dir checkout keeps its git dir at the path its .git file names, usually OUTSIDE the project (the main repository's .git/worktrees/<name>, the superproject's .git/modules/<name>, or the separate git dir): each such git dir needs its own deny entry with an absolute path, written with a leading '//', for example "Edit(//abs/path/to/repo.git/**)". A linked worktree also uses its common dir, the main repository's whole git dir, where git runs hooks and reads config for every commit made in the worktree: add "Edit(//abs/path/to/main/.git/**)" for it, which also covers .git/worktrees/<name>. For a worktree of a --separate-git-dir repository the common dir is that separate git dir, so its own "Edit(//abs/path/to/repo.git/**)" entry is the one to add. Bash is not covered by these rules (only the file commands and redirections the host itself recognises), so a shell command can still write into .git; the git CLI keeps working. Recommended deny list, all five forms: "Edit(/.git)", "Edit(/.git/**)", "Edit(**/.git)", "Edit(**/.git/**)" and "Edit(//<absolute path of the common git dir>/**)". The permissions documentation states the directory forms directly: a leading '/' anchors the rule at the project root, a leading '//' makes it an absolute path, '**' crosses directories, so the common-dir entry also covers .git/worktrees/<name>, a relative pattern such as "Edit(**/.git/**)" matches at any depth, which reaches the .git directory of a nested repository, and an anchored rule matches only at its anchored location, so "Edit(/.git)" does not reach a nested submodule's <sub>/.git pointer file. The two single-file forms, "Edit(/.git)" for the project's own pointer file and "Edit(**/.git)" for a nested submodule's pointer file, are inferred from the documented gitignore pattern semantics (a pattern without a trailing '/' matches a file as well as a directory) and are not separately documented. The hooks deny writes to these pointer files regardless; the host rules are defence in depth where hooks do not run.
 - Fail-closed availability effects of the .git rule: because the rule judges the physical target, any Write, Edit or NotebookEdit, in any project with the plugin's hooks, is denied when the target cannot be resolved physically: more than 40 symlinks followed in one path, counted together however they nest (a loop, a long chain of links, or links that name other links many times over), a symlink that cannot be read, more than 64 not-yet-existing directory levels, a lookup longer than 1023 bytes while the existing part of the path is resolved (only lookups along the existing part are capped, at the smallest PATH_MAX of the supported hosts; the not-yet-existing tail is not measured. So on Linux a path of 1,024 to 4,095 bytes is refused when its existing part needs such a lookup, and so is a write into an existing directory whose own path is longer than 1,018 bytes), or an existing directory that cannot be searched. It is also denied when a .git file or a commondir file on the paths checked has a first line longer than 1,063 bytes (the read stops there, so a huge or blank-padded pointer file cannot stall the check), or holds anything after its first line other than line breaks (git takes the whole file, line breaks included, as the path of the git dir, and every pointer git writes is one line), or has 1,065 bytes or more before its first NUL byte even when everything after its first line is line breaks (the read stops there, so the end of the file is not seen: a short first line padded with line breaks, and a first line of exactly 1,063 bytes followed by two line breaks, are denied too), or has a CR, a space or a tab right before its first NUL byte (git reads the file only up to its first NUL byte and keeps that character in the path of the git dir, while the check drops a trailing CR or blank), and when the check exceeds its work budget, so that it always ends inside the 5 s hook timeout (a hook cut off by the timeout lets the write through): more than 4,096 path steps (components read, .git entries probed and directory comparisons), more than 16 .git files or .git symlinks on the paths checked, or more than 2 seconds. Create the directories first, or write to the real path the links lead to. Separately, every Write, Edit or NotebookEdit whose path contains a line break (LF, CR) or another control character (U+0000-U+001F, U+007F-U+009F) is denied, by the scope guard in every project and by the state guard in a project with an engagement, because a shell reading of such a path can differ from the name the filesystem opens (reason token path-control-char).
 - The designer's ux path set also refuses manifest, lockfile and tool-config names: package.json, composer.json, deno.json, project.json, package-lock.json, npm-shrinkwrap.json, tsconfig.json, tsconfig.*.json, jsconfig.json, jsconfig.*.json, *.config.json and any name starting with a dot, under outputs/ and design-system/ (reason token ux-config).
-- Bash and the control plane: where hooks execute, in a project with an engagement, a Bash command that names .shode-house itself, one of its control-plane roots (.shode-house/state, .shode-house/journal, .shode-house/scope, with or without a trailing '/'), a name that starts with one of them (such as .shode-house/statefoo), or any '..' segment after .shode-house/ (such as .shode-house/approval/../state) is denied, whether it reads or writes. Commands a legitimate user can hit: ls .shode-house, du -sh .shode-house, git add .shode-house. The check is deny-if-mentioned over a fixed set of spellings, compared after collapsing '//' and removing '/./', in any ASCII case, relative or absolute; it is not a parser. Other children (config.yaml, approval/, side-effects/) and sibling names such as .shode-house-backup still pass, and the plugin's own scripts that manage the directory (scripts/workflow-state.sh, scripts/scope-check.sh) still run. It fails closed: a command that names .shode-house/<child> and also uses '..' after it (cat .shode-house/config.yaml && cd ..) is denied too. Not seen, by design: a name built by quote splicing, a glob or brace, a variable, a backslash escape, printf or base64, the dots of '..' spliced or escaped (or a '..' produced by a glob, a brace such as .{.,x}, or a variable), a '..' written before the mention that runs after a cd in the same command (for example a function body, a trap or a loop), a symlink planted under .shode-house/ (such as ln -s .. .shode-house/approval/l), a relative path in a later, separate Bash call after cd into the directory, and git clean -fdX / -fdx (which removes the ignored directory without naming it). /init Phase 0 adds the /.shode-house/ ignore rule with the Read, Edit and Write tools, not Bash, so re-running /init in an engaged project is not refused; use those tools for anything under .shode-house.
+- Bash and the control plane: where hooks execute, in a project with an engagement, a Bash command that names .shode-house itself, one of its control-plane roots (.shode-house/state, .shode-house/journal, .shode-house/scope, with or without a trailing '/'), a name that starts with one of them (such as .shode-house/statefoo), or any '..' segment after .shode-house/ (such as .shode-house/approval/../state) is denied, whether it reads or writes. Commands a legitimate user can hit: ls .shode-house, du -sh .shode-house, git add .shode-house. The check is deny-if-mentioned over a fixed set of spellings, compared after collapsing '//' and removing '/./', in any ASCII case, relative or absolute; it is not a parser. Other children (config.yaml, approval/, side-effects/) and sibling names such as .shode-house-backup still pass, and the plugin's own scripts that manage the directory (scripts/workflow-state.sh, scripts/scope-check.sh) still run. It fails closed: a command that names .shode-house/<child> and also uses '..' after it (cat .shode-house/config.yaml && cd ..) is denied too. Not seen, by design: a name built by quote splicing, a glob or brace, a variable, a backslash escape, printf or base64, the dots of '..' spliced or escaped (or a '..' produced by a glob, a brace such as .{.,x}, or a variable), a '..' written before the mention that runs after a cd in the same command (for example a function body, a trap or a loop), a symlink planted under .shode-house/ (such as ln -s .. .shode-house/approval/l), a relative path in a later, separate Bash call after cd into the directory, and git clean -fdX / -fdx (which removes the ignored directory without naming it). cook init Phase 0 adds the /.shode-house/ ignore rule with the Read, Edit and Write tools, not Bash, so re-running cook init in an engaged project is not refused; use those tools for anything under .shode-house.
 
 ## 🛡️ Safety Discipline
 
@@ -590,7 +595,7 @@ Pattern: ระบุ action + impact + rollback → ขอ confirm → execute
 
 **Add new domain expert**:
 1. Drop `agents/<name>.md` (ตาม 5-Dim Role template)
-2. Update the routing table ใน `output-styles/shode-house.md` + role directory ใน `skills/workflow/ask/SKILL.md` + `skills/discipline/shode-house-routing/SKILL.md`
+2. Update the routing table ใน `output-styles/shode-house.md` + role directory ใน `skills/workflow/cook/SKILL.md` + `skills/discipline/shode-house-routing/SKILL.md`
 3. `make validate` ต้องเขียว → bump version → `make pack`
 
 **Remove agent**: ลบไฟล์ + remove จาก routing + capability matrix

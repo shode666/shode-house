@@ -106,7 +106,7 @@ trade/order/exchange/FIX → `plan` with the trading domain reference
 
 ## 📏 T-shirt (🔴 internal routing heuristic only, ไม่ส่งต่อ user)
 
-> T-shirt = **internal signal** สำหรับ router decide parallel vs sequential delegation. **ห้ามใช้เป็น time estimate ส่งให้ user** (per `shode-house-discipline/main-session.md` § No Man-Day). ถ้า user explicit ขอ effort → ใช้ `/design-system --estimate`.
+> T-shirt = **internal signal** สำหรับ router decide parallel vs sequential delegation. **ห้ามใช้เป็น time estimate ส่งให้ user** (per `shode-house-discipline/main-session.md` § No Man-Day). ถ้า user explicit ขอ effort → ใช้ `cook spec --estimate`.
 
 Relative scale (no time anchor):
 - **XS** = trivial atomic change (one-line tweak / typo)
@@ -205,4 +205,4 @@ Routing is done when the work type, one sole owner, the domain-specialist decisi
 Resolve source-root paths beginning agents/, skills/, references/, commands/ or output-styles/ under this plugin's knowledge/ directory, not the user's project.
 Resolve paths beginning ./ or ../ from this file's own directory; resolve other relative file names in this skill under this plugin's knowledge/skills/discipline/shode-house-routing/ directory.
 Use actual host tools and preserve host/project/user authority.
-No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:ask` first.
+No shode-house safety floor in this context (a main session without the router style)? Load `shode-house:cook` first.

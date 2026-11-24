@@ -58,7 +58,7 @@ REQUIRED = {"f12-independent-axis-code-reviewer", "f12-independent-axis-qa-engin
     "bias-reggie-runbook-blocked", "bias-sara-no-microservices-default", "bias-iris-no-yield-oic", "bias-quinn-premerge-ui-blocked",
     # P6 validation fixes (Sentinel F1b/F4)
     "dave-observable-implement", "bias-chris-unsure-blocked", "bias-quinn-unsure-blocked",
-    # P7 (Sentinel P7-C4/C5): fast path + full-workflow trigger at their single owner (ask root); trust cascade stays a behaviour rule
+    # P7 (Sentinel P7-C4/C5): fast path + full-workflow trigger at their single owner (cook root); trust cascade stays a behaviour rule
     "fast-path-five-conditions", "fast-path-still-enforces", "full-workflow-nine-triggers", "trust-cascade-no-upgrade",
     # 8ss core-Sonnet RC-1 / E1c: the always-on output style carries the dispatch floor + Phase 1c no-waiver
     "oliver-dispatch-floor", "oliver-phase1c-no-waiver",
@@ -259,29 +259,29 @@ class RootSafetyAnchorTest(unittest.TestCase):
             self.assertIn(case, section)
         self.assertNotRegex(section, r"(?i)skip (the )?full suite|affected only|only affected")
         # owner-by-pointer, no copy (C29-1): the two callers cite the section and do not restate the sentence
-        for path in ("skills/workflow/dev-gate/SKILL.md", "commands/implement.md"):
+        for path in ("skills/workflow/dev-gate/SKILL.md", "references/workflows/implement.md"):
             caller = (ROOT / path).read_text()
             self.assertRegex(caller, r"(?m)^## Completion$", path)
             self.assertIn("`shode-house-deliverable` § Completion", caller)
             self.assertNotIn("outranks completion", caller)
         self.assertIn("Complete = no open § Stop and return condition", (ROOT / "skills/workflow/dev-gate/SKILL.md").read_text())
-        impl = (ROOT / "commands/implement.md").read_text()
+        impl = (ROOT / "references/workflows/implement.md").read_text()
         self.assertIn("only the router closes, then reads back", impl)  # "no intervention" is not auto-close (C29-4); v4 W6 persona -> router
         for kept in ("pre-implement-ui", "Phase 3a", "Phase 3b", "M8 Close-on-Done Guard"):
             self.assertIn(kept, impl)
-        self.assertGreaterEqual((ROOT / "commands/review.md").read_text().count("REVIEW DISPATCH CARD"), 1)
+        self.assertGreaterEqual((ROOT / "references/workflows/review.md").read_text().count("REVIEW DISPATCH CARD"), 1)
 
     def test_commands_point_at_the_style_card_and_never_emit_the_router_header(self):
         """v4 ADR F-2/F-11, W6: the review card lives in the router style; command bodies point at it and never
         write the delegation header themselves (the style does), so a style-less run of a command stays unrouted."""
-        for path in ("commands/review.md", "commands/implement.md"):
+        for path in ("references/workflows/review.md", "references/workflows/implement.md"):
             self.assertIn("`output-styles/shode-house.md` § Review card", (ROOT / path).read_text(), path)
         for path in sorted((ROOT / "commands").glob("*.md")):
             with self.subTest(command=path.name):
                 self.assertNotRegex(path.read_text(), r"router:\s*shode-house@", "a command must not emit the router header")
 
     STYLE_GATE_S2 = "Router style: if `output-styles/shode-house.md` is not already in context, read it before the first dispatch."
-    # UD R73: the S3 gate names the one BLOCKED literal shared with the ask skill's §5.8.2 rule.
+    # UD R73: the S3 gate names the one BLOCKED literal shared with the cook skill's §5.8.2 rule.
     STYLE_GATE_S3 = ("Router style not active in this session → report "
                      "`BLOCKED: team execution needs the router style (Claude Code)`; "
                      "do not read the style file to act as the router.")
@@ -296,7 +296,8 @@ class RootSafetyAnchorTest(unittest.TestCase):
         v4 = os.environ.get("SHODE_REQUIRE_V4") == "1" or int(
             json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["version"].split(".")[0]) >= 4
         want = self.STYLE_GATE_S3 if v4 else self.STYLE_GATE_S2
-        dirs = ("commands", "plugins/shode-house/commands", "plugins/shode-house/knowledge/commands")
+        dirs = ("references/workflows", "plugins/shode-house/knowledge/references/workflows",
+                "plugins/shode-house-antigravity/knowledge/references/workflows")
         seen = 0
         for d in dirs:
             for path in sorted((ROOT / d).glob("*.md")):
@@ -309,14 +310,14 @@ class RootSafetyAnchorTest(unittest.TestCase):
                     self.assertEqual(gates, [want], "exactly one router-style line, in this stage's form")
                     rest = "\n".join(l for l in text.splitlines() if not l.startswith("Router style"))
                     self.assertNotRegex(rest, self.STYLE_READ, "only the router-style line may decide whether to read the style")
-        self.assertGreaterEqual(seen, 12, "consult, design-system, implement, review in all three command dirs")
+        self.assertGreaterEqual(seen, 12, "consult, spec, implement, review in all three workflow dirs")
 
     def test_style_less_command_stays_blocked_but_ask_uses_capability_gate(self):
-        """Commands still fail closed without their style; ask may coordinate genuine native workers."""
+        """Workflow references still fail closed without their style; cook may coordinate genuine native workers."""
         literal = "`BLOCKED: team execution needs the router style (Claude Code)`"
-        ask = (ROOT / "skills/workflow/ask/SKILL.md").read_text()
-        self.assertNotIn(literal, ask)
-        self.assertIn("If delegation is unavailable, state that team execution is unavailable", ask)
+        cook = (ROOT / "skills/workflow/cook/SKILL.md").read_text()
+        self.assertNotIn(literal, cook)
+        self.assertIn("If delegation is unavailable, state that team execution is unavailable", cook)
         self.assertIn(literal, self.STYLE_GATE_S3)
 
     def test_p5_reworded_lines_keep_their_stop_half(self):
@@ -327,7 +328,7 @@ class RootSafetyAnchorTest(unittest.TestCase):
             self.assertIn(needle, line)
         rule = "ห้าม proceed เมื่อกำกวมแบบ material (→ § Ask vs derive; ไม่แน่ใจว่า material ไหม = material) → grill option-style"
         self.assertIn(rule, (ROOT / DISCIPLINE_ROOT).read_text())
-        ds = (ROOT / "commands/design-system.md").read_text()
+        ds = (ROOT / "references/workflows/spec.md").read_text()
         self.assertIn("— do not ask", ds)
         self.assertNotIn("ต้องการ estimation ด้วยมั้ย", ds)
 

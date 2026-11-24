@@ -210,7 +210,7 @@ class ScenarioScoreTest(unittest.TestCase):
         self.pair({"skills": ["diagnose"]}, [skill("diagnose"), final()], [skill("incident"), final()])
         self.assertTrue(self.verdict({"skills": ["diagnose"]},   # Read / shell read of the skill file also counts
                                      [read("/r/skills/ops/diagnose/SKILL.md"), final()]))
-        self.assertTrue(self.verdict({"skills": ["ask"]}, [bash("cat .agents/skills/ask/SKILL.md"), final()]))
+        self.assertTrue(self.verdict({"skills": ["cook"]}, [bash("cat .agents/skills/cook/SKILL.md"), final()]))
 
     def test_route_any(self):   # skill OR owning agent, anywhere in the run (live 2026-09-20: spawn tool = Agent)
         exp = {"route_any": ["skill:secure", "agent:security-engineer"]}
@@ -231,12 +231,12 @@ class ScenarioScoreTest(unittest.TestCase):
         exp = {"route_any": ["skill:secure"], "max_skills": 2}
         self.pair(exp, [skill("secure"), skill("secure"), skill("slo"), final()],      # repeat load is not distinct
                   [skill("secure"), skill("slo"), skill("incident"), final()], kind="probe")   # shotgun
-        preload = [skill(n) for n in ("shode-house-routing", "shode-house-discipline", "ask", "review-checklist", "caveman", "domain-core")]
+        preload = [skill(n) for n in ("shode-house-routing", "shode-house-discipline", "cook", "review-checklist", "caveman", "domain-core")]
         self.assertTrue(self.verdict(exp, preload + [skill("secure"), skill("slo"), final()], kind="probe"),
                         "only the 12 routable workflow/ops/ui skills count")
         self.assertFalse(self.verdict(exp, preload + [skill("secure"), skill("slo"), skill("web-q"), final()], kind="probe"))
         shipped = {q.parent.name for g in ("workflow", "ops", "ui") for q in ROOT.glob(f"skills/{g}/*/SKILL.md")}
-        self.assertEqual(trc.ROUTABLE_SKILLS, shipped - {"ask", "meeting"})
+        self.assertEqual(trc.ROUTABLE_SKILLS, shipped - {"cook", "meeting"})
 
     def test_probe_infra_error_is_never_scored_as_behaviour(self):
         for exp in ({"route_any": ["skill:data-migration"]}, {"max_spawns": 0, "must_not_load": ["data-migration"]}):
@@ -476,18 +476,18 @@ class ScenarioScoreTest(unittest.TestCase):
 class CodexNormalizeTest(unittest.TestCase):
     def test_synthetic_codex_trace_scores_like_claude(self):
         events = [{"type": "thread.started", "thread_id": "t"},
-                  {"type": "item.started", "item": {"id": "c1", "type": "command_execution", "command": "/bin/zsh -lc 'cat .agents/skills/ask/SKILL.md'"}},
-                  {"type": "item.completed", "item": {"id": "c1", "type": "command_execution", "command": "/bin/zsh -lc 'cat .agents/skills/ask/SKILL.md'", "exit_code": 0}},
+                  {"type": "item.started", "item": {"id": "c1", "type": "command_execution", "command": "/bin/zsh -lc 'cat .agents/skills/cook/SKILL.md'"}},
+                  {"type": "item.completed", "item": {"id": "c1", "type": "command_execution", "command": "/bin/zsh -lc 'cat .agents/skills/cook/SKILL.md'", "exit_code": 0}},
                   codex("command_execution", command="/bin/zsh -lc pytest"),
                   codex("file_change", changes=[{"path": "/fx/src/ledger.py", "kind": "update"}, {"path": "/fx/new.py", "kind": "add"}]),
                   codex("agent_message", text="Fixed the typo."), TURN]
         self.assertTrue(trc.is_codex(events))
         obs = trc.observe(trc.normalize_codex(events))
-        self.assertEqual(["ask"], obs["skills"])
-        self.assertEqual(["cat .agents/skills/ask/SKILL.md", "pytest"], obs["bash"])   # started+completed = one call
+        self.assertEqual(["cook"], obs["skills"])
+        self.assertEqual(["cat .agents/skills/cook/SKILL.md", "pytest"], obs["bash"])   # started+completed = one call
         self.assertEqual(["/fx/src/ledger.py", "/fx/new.py"], obs["writes"])
         self.assertEqual("Fixed the typo.", obs["result_text"])
-        checks = trc.score({"expected": {"skills": ["ask"], "validation_forbidden": r"pytest\s*$",
+        checks = trc.score({"expected": {"skills": ["cook"], "validation_forbidden": r"pytest\s*$",
                                          "files_forbidden_glob": ["new.py"]}}, obs)
         self.assertTrue(checks["skills"][0] and checks["run_succeeded"][0])
         self.assertFalse(checks["validation_forbidden"][0]); self.assertFalse(checks["files_forbidden_glob"][0])
