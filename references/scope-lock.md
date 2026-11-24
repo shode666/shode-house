@@ -151,11 +151,17 @@ agent พักเฉพาะ affected write แล้วบันทึก **S
 
 ## Script-checkable enforcement (🆕 bd: shode-house-5cs.4, L2)
 
-Applicability: this section documents the separate repository script runtime, only
-for projects that explicitly adopted it and have verified its hooks are active.
-The distributed instruction-only plugin supplies neither these scripts nor hooks;
-it must not claim this enforcement or install the runtime implicitly. Without it,
-use the harness's scoped ownership, serialized writes and honest enforcement limits.
+Applicability: Claude Code installs (marketplace tree and `.plugin`) ship `hooks/hooks.json`,
+the guard scripts and the two scripts they call (`scripts/scope-check.sh`, `scripts/lib/lock.sh`).
+The scope and state guards judge a project only once it has `.shode-house/state` (created by the
+separate script runtime, never by installing the plugin or by a hook); SessionStart reports `ENFORCED`
+or not. The plugin never creates project runtime state implicitly and must not claim this enforcement
+where SessionStart does not report it. Codex and Cursor installs do not rely on these hooks: use the
+harness's scoped ownership, serialized writes and honest enforcement limits.
+The bind command `scripts/scope-check.sh <bd> <label> --bind` is a token the hook recognises and records
+itself; where the project has no `scripts/scope-check.sh` the command then fails to run but the hook has
+already recorded the binding, so the agent proceeds. shortcut(bd:shode-house-7od): bind command is
+project-relative; upgrade → plugin-root-based command.
 
 ข้างบนคือ **prose protocol** (chat message + router อ่านเอง) — ชั้นที่ **script บังคับจริง** (เมื่อ SessionStart รายงาน `ENFORCED`; ดู § Enforcement ceiling)
 อยู่ที่ `scripts/scope-check.sh` (per-bd manifest `.shode-house/scope/<bd-id>.json`) +

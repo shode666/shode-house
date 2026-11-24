@@ -1,10 +1,9 @@
 # references/scope/ -- machine-checkable scope lock (Milestone E)
 
-Applicability: this is documentation for the separate script runtime, only for
-projects that explicitly adopted it and verified its tools/hooks. The distributed
-instruction-only plugin does not supply or implicitly install that runtime. Without
-it, use scoped ownership and serialized writes under the harness; do not claim
-script enforcement from this reference alone.
+Applicability: Claude Code installs ship the hooks and these scripts; the guards judge a project
+only once it has `.shode-house/state`, which the plugin never creates implicitly (SessionStart reports
+`ENFORCED` or not). Codex and Cursor installs do not rely on them. Without enforcement, use scoped
+ownership and serialized writes under the harness; do not claim script enforcement from this reference alone.
 
 > bd: shode-roadmap/C-E1 · maintainer runtime roadmap SS7 (Concurrency Safety) 7.1-7.3 (that document does not ship)
 > Read by `scripts/scope-check.sh` and humans only -- never preloaded into an agent

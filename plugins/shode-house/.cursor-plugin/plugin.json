@@ -13,5 +13,6 @@
     "agents",
     "skills"
   ],
-  "commands": []
+  "commands": [],
+  "hooks": "./cursor-hooks/hooks.json"
 }

@@ -83,6 +83,8 @@ class CodexPackageTest(unittest.TestCase):
             *("commands/%s.md" % n for n in ("ask", "consult", "design-system", "implement", "init", "review")),  # tombstone-allow
             *("knowledge/commands/%s.md" % n for n in ("ask", "consult", "design-system", "implement", "init", "review")),  # tombstone-allow
             "knowledge/skills/workflow/ask/SKILL.md", "skills/ask/SKILL.md",  # tombstone-allow
+            # bd shode-house-ewk: the hooks ship in the Claude tree, so the "instruction-only, no hooks" applicability text changed
+            "knowledge/references/workflows/init.md",
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(
@@ -113,7 +115,9 @@ class CodexPackageTest(unittest.TestCase):
         openai = portable["extensions"]["com.openai"]
         self.assertEqual("./codex-hooks/hooks.json", openai["hooks"])
         self.assertEqual("./skills/cook/SKILL.md", openai["onboardingSkill"])
-        self.assertNotIn("hooks/hooks.json", entries)  # would be auto-discovered by Claude too
+        # Claude Code auto-discovers hooks/hooks.json; the Codex bundle must never take that path.
+        self.assertNotEqual(json.loads(entries["hooks/hooks.json"]), json.loads(entries["codex-hooks/hooks.json"]))
+        self.assertEqual((ROOT / "hooks/hooks.json").read_bytes(), entries["hooks/hooks.json"])
         for name in ("codex-hooks/hooks.json", "codex-hooks/session_context.py",
                      "codex-hooks/pre_tool_use.py"):
             self.assertIn(name, entries)

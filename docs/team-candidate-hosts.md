@@ -8,9 +8,9 @@ One tree serves four hosts:
 
 | Host | Manifest | What is discovered |
 |---|---|---|
-| Claude Code | `.claude-plugin/plugin.json` | 20 flat skills, 6 agent role contracts, `/shode-house:cook` (4.2.0: no commands) |
-| Codex | `.codex-plugin/plugin.json` | 24 skills (agent files are not a Codex concept) |
-| Cursor | `.cursor-plugin/plugin.json` | skills + agents by folder discovery; `commands: []` (4.2.0: no host registers a command; cook is a skill) |
+| Claude Code | `.claude-plugin/plugin.json` | 20 flat skills, 6 agent role contracts, `/shode-house:cook` (4.2.0: no commands); the guard hooks (`hooks/hooks.json`) |
+| Codex | `.codex-plugin/plugin.json` | 24 skills (agent files are not a Codex concept); observed on Codex 0.155.1 tree install: the root portable `plugin.json` is picked and no plugin hooks load (bd `shode-house-on5`) |
+| Cursor | `.cursor-plugin/plugin.json` | skills + agents by folder discovery; `commands: []` (4.2.0: no host registers a command; cook is a skill); `hooks` -> empty `cursor-hooks/hooks.json` (documented: a manifest field replaces default discovery; unconfirmed on a live Cursor) |
 | Antigravity | root `plugin.json` | skills only; agents are knowledge resources, not native registrations |
 
 Layout: `knowledge/` holds every original file byte-for-byte (the `agents/*.md`, the five
@@ -18,8 +18,9 @@ skill buckets, `references/` incl. `references/workflows/`, `output-styles/`). `
 thin discovery adapters whose only job is to make the host read the full source and its
 prerequisite skills. Adapter frontmatter is host-neutral: `name`, `description`, `tools`,
 `skills`, `model: inherit` (Claude `color` and model aliases are dropped so no host has to
-resolve another host's model names). No hooks, MCP servers or runner scripts ship in the
-package; the harness is a coordination contract, not a runtime.
+resolve another host's model names). The Claude Code guard hooks (`hooks/`, plus `scripts/scope-check.sh` and `scripts/lib/lock.sh`
+which they call) ship in the package; no MCP server or other runner script does, and the harness
+is otherwise a coordination contract, not a runtime.
 
 Limits that stay true regardless of layout: skill discovery does not prove separate
 workers exist; when a host has no delegation tool, required independent review is

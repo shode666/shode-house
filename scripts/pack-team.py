@@ -134,7 +134,8 @@ CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts, fr
 # erratum 1 §5.8.1 "HOST-NOTES" bullets, persona-free; Antigravity per W0 P4 (agy 1.2.2 validate).
 HOST_BULLETS = (
     "- Claude Code: `.claude-plugin` manifest, flat skills, agents; no commands (`/shode-house:cook` is the "
-    "entry). The router style delegates to native registered agents.\n"
+    "entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to "
+    "native registered agents.\n"
     "- Codex: the `cook` skill coordinates genuine separate workers using the six generated role contracts. "
     "After the user trusts the hooks and Python 3 is available, lifecycle hooks restore context after compaction "
     "and guard direct structured writes. Hook text is not "
@@ -418,6 +419,42 @@ def codex_hook_entries(root=ROOT):
     return entries
 
 
+# Files the hooks read at run time from outside hooks/: guard-scope-write.sh calls
+# `<plugin root>/scripts/scope-check.sh`, which sources `scripts/lib/lock.sh` and
+# `hooks/scripts/_casefold.sh`. Without them the scope guard cannot answer and denies writes.
+HOOK_RUNTIME_SCRIPTS = ("scripts/scope-check.sh", "scripts/lib/lock.sh")
+
+
+def claude_hook_entries(root=ROOT):
+    """Return the Claude Code hook bundle: hooks/hooks.json (auto-discovered at the plugin root),
+    every hooks/scripts/* file and the runtime scripts the guards call, byte-identical to source."""
+    root = root.resolve()
+    entries = {}
+    folder = root / "hooks"
+    if not folder.is_dir() or folder.is_symlink():
+        raise ValueError(f"invalid hook directory: {folder}")
+    paths = [p for p in sorted(folder.rglob("*"))]
+    paths += [root / name for name in HOOK_RUNTIME_SCRIPTS]
+    for path in paths:
+        if path.is_symlink():
+            raise ValueError(f"symlink not allowed in the hook bundle: {path}")
+        if path.is_dir() or "__pycache__" in path.parts or path.name == ".DS_Store":
+            continue
+        if not path.is_file() or not path.resolve().is_relative_to(root):
+            raise ValueError(f"invalid hook bundle entry: {path}")
+        entries[path.relative_to(root).as_posix()] = path.read_bytes()
+    for name in ("hooks/hooks.json", *HOOK_RUNTIME_SCRIPTS):
+        if name not in entries:
+            raise ValueError(f"hook bundle is missing {name}")
+    return entries
+
+
+def executable_names(root=ROOT):
+    """Names of the hook-bundle files whose source carries an executable bit (hooks.json runs them directly)."""
+    root = root.resolve()
+    return {name for name in claude_hook_entries(root) if (root / name).stat().st_mode & 0o111}
+
+
 def roles_and_skills(source_entries):
     roles = sorted(p for p in source_entries if p.startswith("agents/") and p.endswith(".md"))
     skills = sorted(p for p in source_entries if p.endswith("/SKILL.md"))
@@ -481,8 +518,10 @@ def payload(root=ROOT):
                          f"{authored} != {sorted(PUBLISHED_COMMANDS)} -- publishing a command is a "
                          "deliberate decision; add or remove it in PUBLISHED_COMMANDS")
     entries["LICENSE"] = source_entries["LICENSE"]
-    # Codex hooks use an explicit compatibility-manifest path, never hooks/hooks.json,
-    # so Claude's automatic hook discovery and behavior remain unchanged.
+    # Claude Code auto-discovers <plugin root>/hooks/hooks.json, so the marketplace tree carries the same
+    # guard hooks as the repo root and the `make pack` archive, plus the scripts they call (bd shode-house-ewk).
+    # The Codex hook bundle ships separately; on the tree install route Codex 0.155.1 does not load it (bd shode-house-on5).
+    entries.update(claude_hook_entries(root))
     entries.update(codex_hook_entries(root))
     manifest = {key: manifest[key] for key in
                 ("name", "version", "author", "homepage", "repository", "license")}
@@ -523,6 +562,10 @@ def payload(root=ROOT):
     return manifest["version"], entries
 
 
+CURSOR_HOOKS_PATH = "./cursor-hooks/hooks.json"
+CURSOR_EMPTY_HOOKS = (json.dumps({"version": 1, "hooks": {}}, indent=2) + "\n").encode()
+
+
 def unified_payload(root=ROOT):
     """One Claude/Codex/Cursor tree. Antigravity needs a separate host artifact."""
     version, entries = payload(root)
@@ -532,6 +575,12 @@ def unified_payload(root=ROOT):
     cursor = {key: manifest[key] for key in ("name", "version", "description", "author", "license")}
     # No commands are published; Cursor gets cook as a skill.
     cursor.update(displayName="Shode House", keywords=["software-house", "agents", "skills"], commands=[])
+    # Containment (bd shode-house-ewk C3): Cursor documents `hooks` as a manifest field (string path or inline
+    # config) and says a specified manifest field replaces default folder discovery, so the tree's Claude-format
+    # hooks/hooks.json is not meant to load there. The value is an empty Cursor-format file. UNCONFIRMED on a
+    # live Cursor (not installed here): status PENDING host verification, never claimed as verified.
+    cursor["hooks"] = CURSOR_HOOKS_PATH
+    entries[CURSOR_HOOKS_PATH.removeprefix("./")] = CURSOR_EMPTY_HOOKS
     entries[".cursor-plugin/plugin.json"] = (json.dumps(cursor, indent=2) + "\n").encode()
     entries["HOST-NOTES.md"] = (
         f"# Shode House {version} host notes\n\n"
@@ -541,7 +590,12 @@ def unified_payload(root=ROOT):
         "Use cook as the entry.\n\n" + HOST_BULLETS + "\n"
         "Skill discovery does not prove separate workers are available. If delegation is "
         "unavailable, report team execution BLOCKED; never replace it with role-play.\n"
-        "No MCP startup is included. Codex lifecycle hooks load only through its explicit manifest.\n"
+        "No MCP startup is included. Claude Code loads the guard hooks from `hooks/hooks.json` (the scripts "
+        "they call ship in `hooks/scripts/` and `scripts/`). Observed on Codex 0.155.1 (tree install): it "
+        "picks the root portable `plugin.json`, Claude hooks are not loaded and Codex's own guards are currently inert "
+        "(bd shode-house-on5); `codex-hooks/` ships but is not loaded. The Cursor manifest points its `hooks` field at an empty "
+        "`cursor-hooks/hooks.json`, so the Claude hooks are not meant to load there (unconfirmed on a live Cursor; "
+        "its \"Include Third-Party Plugins\" path may load hooks from a user's Claude Code install, bd shode-house-wda).\n"
     ).encode()
     problems = audit(entries, collect(root)[1])
     if problems:
@@ -555,7 +609,7 @@ def antigravity_payload(root=ROOT):
     entries = dict(entries)
     entries.pop(".codex-plugin/plugin.json", None)
     entries.pop(".cursor-plugin/plugin.json", None)
-    for name in [path for path in entries if path.startswith("codex-hooks/")]:
+    for name in [path for path in entries if path.startswith(("codex-hooks/", "cursor-hooks/", "hooks/", "scripts/"))]:
         del entries[name]
     marker = {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
               "name": "shode-house", "version": version, "description": ANTIGRAVITY_DESCRIPTION}
@@ -904,7 +958,7 @@ def _check_opened(tree_fd, state, identity):
                      "after the checks); nothing was written or deleted")
 
 
-def _write_entry(tree_fd, name, content):
+def _write_entry(tree_fd, name, content, executable=False):
     """Write one tree file without ever writing through what is at its path (S23-3/S23-4): parents are opened
     with O_NOFOLLOW, an unchanged regular file with one link is left alone, and anything else (a changed file, a
     hardlink, a symlink, a FIFO) is replaced by a new file renamed over the entry in the same directory."""
@@ -917,11 +971,12 @@ def _write_entry(tree_fd, name, content):
         except FileNotFoundError:
             info = None
         if info is not None and stat.S_ISREG(info.st_mode) and info.st_nlink == 1 \
-                and _read_regular(leaf, dir_fd=fd) == content:
+                and bool(info.st_mode & 0o100) == executable and _read_regular(leaf, dir_fd=fd) == content:
             return
         temp = f".{leaf}.pack-{os.getpid()}-{os.urandom(4).hex()}"
         out = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=fd)
         try:
+            os.fchmod(out, 0o755 if executable else 0o644)
             view = memoryview(content)
             while view:
                 view = view[os.write(out, view):]
@@ -993,11 +1048,12 @@ def write_tree(destination, root=ROOT, host="main"):
                          f"{' + '.join(TREE_MARKER)} of this plugin); `--tree` deletes every file that is not a "
                          "tree entry (S23-6), so point it at an empty or new directory or an existing tree")
     version, entries = payload_for_host(host, root)
+    executable = executable_names(root)
     tree_fd = _open_destination(destination, root, create=identity is None)
     try:
         _check_opened(tree_fd, state, identity)
         for name, content in sorted(entries.items()):
-            _write_entry(tree_fd, name, content)
+            _write_entry(tree_fd, name, content, name in executable)
         # Stale cleanup through directory fds: fwalk never enters a linked directory, and unlink never follows
         # a link at the leaf. Only regular files are removed (as before); anything else is left for --check.
         for folder, _, filenames, folder_fd in os.fwalk(".", dir_fd=tree_fd, follow_symlinks=False):
@@ -1045,7 +1101,13 @@ def tree_drift(destination, root=ROOT, host="main"):
     """Paths whose committed tree differs from a fresh build (empty = in sync)."""
     _, entries = payload_for_host(host, root)
     actual = read_tree(destination)
-    return sorted(set(actual) ^ set(entries) | {k for k in entries if k in actual and actual[k] != entries[k]})
+    drift = set(actual) ^ set(entries) | {k for k in entries if k in actual and actual[k] != entries[k]}
+    # The hook scripts run directly from hooks.json, so the executable bit is part of the contract.
+    executable = executable_names(root)
+    for rel, path in _walk(destination)[0].items():
+        if rel in entries and bool(path.stat().st_mode & 0o100) != (rel in executable):
+            drift.add(rel)
+    return sorted(drift)
 
 
 def archive_plan(destination, root=ROOT, host="main"):
@@ -1058,13 +1120,14 @@ def archive_plan(destination, root=ROOT, host="main"):
 def build(destination, root=ROOT, host="main"):
     output, version, entries = archive_plan(destination, root, host)
     Path(destination).mkdir(parents=True, exist_ok=True)
+    executable = executable_names(root)
     # Exclusive creation fails safely rather than overwriting an earlier candidate.
     with output.open("xb") as stream:
         with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, content in sorted(entries.items()):
                 item = zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0))
                 item.compress_type = zipfile.ZIP_DEFLATED
-                item.external_attr = 0o100644 << 16
+                item.external_attr = (0o100755 if name in executable else 0o100644) << 16
                 archive.writestr(item, content)
     with zipfile.ZipFile(output) as archive:
         if archive.testzip() is not None or set(archive.namelist()) != set(entries):

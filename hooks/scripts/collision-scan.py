@@ -48,8 +48,8 @@ Fail-open, documented
 
 WHERE THIS RUNS: only where hooks execute -- Claude Code with this plugin's
 hooks/hooks.json loaded and not switched off by `disableAllHooks: true`, which a project
-can set in its own settings (then no plugin hook runs at all). Not in the generated tree;
-unconfirmed in Cowork. Detection and accident prevention, defence in depth -- not a
+can set in its own settings (then no plugin hook runs at all). Shipped in the generated tree
+too; unconfirmed in Cowork. Detection and accident prevention, defence in depth -- not a
 guarantee, and never a stop against a hostile repository.
 
 Stdlib only. No shell, no subprocess, no network, no writes.

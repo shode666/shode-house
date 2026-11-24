@@ -3388,6 +3388,39 @@
         "every flag kept"
       ],
       "reason": "4.2.0 fix: a workflow's ARGUMENTS now strips the leading intent word so `cook init --quick` and `cook review --debt` reach the moved workflow bodies as the old command arguments; flags are still passed."
+    },
+    {
+      "source": "references/scope-lock.md",
+      "old_fragment": "The distributed instruction-only plugin supplies neither these scripts nor hooks;",
+      "replacement": "references/scope-lock.md",
+      "requires": [
+        "must not claim this enforcement",
+        "judge a project only once it has `.shode-house/state`",
+        "never creates project runtime state implicitly"
+      ],
+      "reason": "Reversal of the 3.17.1 hook-free consent decision for the marketplace tree (task shode-house-ewk, user: ship the hooks): the old sentence denied that the plugin supplies hooks and scripts; the replacement states the true split and keeps the must-not-claim-enforcement and never-create-state intent."
+    },
+    {
+      "source": "references/scope/README.md",
+      "old_fragment": "instruction-only plugin does not supply or implicitly install that runtime. Without",
+      "replacement": "references/scope/README.md",
+      "requires": [
+        "do not claim script enforcement from this reference alone",
+        "judge a project only once it has `.shode-house/state`",
+        "the plugin never creates implicitly"
+      ],
+      "reason": "Reversal of the 3.17.1 hook-free consent decision for the marketplace tree (task shode-house-ewk, user: ship the hooks): the old sentence denied that the plugin supplies hooks and scripts; the replacement states the true split and keeps the must-not-claim-enforcement and never-create-state intent."
+    },
+    {
+      "source": "references/workflows/init.md",
+      "old_fragment": "script runtime described below. The distributed instruction-only plugin does not",
+      "replacement": "references/workflows/init.md",
+      "requires": [
+        "hooks being present is not engagement",
+        "judge a project only once it has `.shode-house/state`",
+        "Do not install a runner, change hooks, or create"
+      ],
+      "reason": "Reversal of the 3.17.1 hook-free consent decision for the marketplace tree (task shode-house-ewk, user: ship the hooks): the old sentence denied that the plugin supplies hooks and scripts; the replacement states the true split and keeps the must-not-claim-enforcement and never-create-state intent."
     }
   ]
 }

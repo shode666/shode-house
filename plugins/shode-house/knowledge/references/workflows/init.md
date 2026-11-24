@@ -57,11 +57,12 @@ fi
 
 ### Phase 0 — runtime ignore rule (only for an adopted script runtime)
 
-Apply this section only when the target project explicitly uses the separate
-script runtime described below. The distributed instruction-only plugin does not
-ship these scripts or require this directory. Do not install a runner, change hooks,
-or create runtime state to satisfy this reference. For other projects, keep the
-confirmed tracker/Markdown checkpoint workflow and skip this runtime-specific step.
+Apply this section only when the target project explicitly uses the script
+runtime described below. Claude Code installs ship the hooks and scripts, but hooks being
+present is not engagement: the guards judge a project only once it has `.shode-house/state`,
+which the plugin never creates implicitly. Do not install a runner, change hooks, or create
+runtime state to satisfy this reference. For other projects, keep the project's
+tracker/Markdown checkpoint workflow and skip this runtime-specific step.
 
 `.shode-house/` คือ runtime dir ที่ script ของ milestone นี้เขียน state/approval/side-effect ลงไป
 (bd:shode-house-5cs.5) — ต้องมี root-anchored ignore rule ใน target project's `.gitignore` ก่อน

@@ -82,14 +82,14 @@ def source_paths():
     roots += [entry.strip("./") for entry in
               json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["skills"]]
     return [item.relative_to(ROOT).as_posix()
-            for name in roots for item in (ROOT / name).rglob("*") if item.is_file()]
+            for name in roots for item in (ROOT / name).rglob("*") if item.is_file() and item.name != ".DS_Store"]
 
 
 def tree_paths():
     """What the COMMITTED generated tree registers on disk (not just what the packer
     would emit), so deleting a shipped adapter fails this invariant directly."""
     tree = ROOT / "plugins/shode-house"
-    return [item.relative_to(tree).as_posix() for item in tree.rglob("*") if item.is_file()]
+    return [item.relative_to(tree).as_posix() for item in tree.rglob("*") if item.is_file() and item.name != ".DS_Store"]
 
 
 def packed_paths():
@@ -226,18 +226,229 @@ class TeamCandidateTest(unittest.TestCase):
             self.assertIn("knowledge/" + name, entries)
             self.assertEqual((ROOT / name).read_bytes(), entries["knowledge/" + name])
 
-    def test_only_codex_gets_explicit_runtime_hooks_and_no_host_gets_mcp(self):
+    def test_claude_hooks_ship_in_the_tree_codex_keeps_its_explicit_bundle_and_no_host_gets_mcp(self):
         _, entries = pack.unified_payload()
-        self.assertFalse(any(p.startswith(("hooks/", "scripts/")) for p in entries))
+        self.assertIn("hooks/hooks.json", entries)           # Claude Code auto-discovers this path
         for name in (".mcp.json", "mcp.json", "hooks.json", "mcp_config.json"):
             self.assertNotIn(name, entries)
         codex = json.loads(entries[".codex-plugin/plugin.json"])
         self.assertEqual("./codex-hooks/hooks.json", codex["hooks"])
         for name in (".claude-plugin/plugin.json", ".cursor-plugin/plugin.json"):
             manifest = json.loads(entries[name])
-            self.assertNotIn("hooks", manifest)
+            if name == ".claude-plugin/plugin.json":
+                self.assertNotIn("hooks", manifest)   # auto-discovery, not a manifest key
+            else:                                      # Cursor: replaces discovery with an empty file
+                self.assertEqual("./cursor-hooks/hooks.json", manifest["hooks"])
             self.assertNotIn("mcpServers", manifest)
         self.assertNotIn("mcpServers", codex)
+
+    def test_marketplace_tree_carries_the_claude_hooks_byte_identical_and_runnable(self):
+        # bd shode-house-ewk: `.claude-plugin/marketplace.json` points at plugins/shode-house, which had no
+        # hooks/, so a marketplace install never ran the guards that hooks/hooks.json registers.
+        tree = ROOT / "plugins/shode-house"
+        committed = pack.read_tree(tree)
+        source = {p.relative_to(ROOT).as_posix(): p for p in sorted((ROOT / "hooks").rglob("*"))
+                  if p.is_file() and "__pycache__" not in p.parts and p.name != ".DS_Store"}
+        self.assertIn("hooks/hooks.json", source)
+        for name, path in source.items():
+            self.assertIn(name, committed, f"the committed marketplace tree lacks {name}")
+            self.assertEqual(path.read_bytes(), committed[name], f"{name} drifted from source")
+            self.assertEqual(bool(path.stat().st_mode & 0o111), bool((tree / name).stat().st_mode & 0o111),
+                             f"{name}: executable bit differs from source")
+        for name in pack.HOOK_RUNTIME_SCRIPTS:
+            self.assertEqual((ROOT / name).read_bytes(), committed.get(name), name)
+            self.assertTrue((tree / name).stat().st_mode & 0o111, f"{name} must stay executable")
+        # every script hooks.json runs resolves inside the tree and is executable there
+        commands = [h["command"] for groups in json.loads(committed["hooks/hooks.json"])["hooks"].values()
+                    for group in groups for h in group["hooks"]]
+        self.assertTrue(commands)
+        for command in commands:
+            match = re.fullmatch(r'"\$\{CLAUDE_PLUGIN_ROOT\}/(hooks/scripts/[A-Za-z0-9._-]+)"', command)
+            self.assertIsNotNone(match, command)
+            self.assertTrue((tree / match.group(1)).stat().st_mode & 0o111, command)
+        # a script the hooks source or call at run time is in the tree: nothing dangling
+        for rel in [n for n in committed if n.startswith(("hooks/scripts/", "scripts/")) and n.endswith(".sh")]:
+            text = committed[rel].decode()
+            for target in re.findall(r'\$SELF_DIR/((?:\.\./)?[A-Za-z0-9._/-]+\.sh)\b', text):
+                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(rel), target))
+                self.assertIn(resolved, committed, f"{rel} reads {resolved}, absent from the tree")
+
+    def test_tree_check_goes_red_when_hooks_are_missing_edited_or_lose_their_exec_bit(self):
+        with tempfile.TemporaryDirectory(prefix="shode-hook-drift-") as tmp:
+            tree = Path(tmp) / "tree"
+            pack.write_tree(tree)
+            self.assertEqual([], pack.tree_drift(tree))
+            guard = tree / "hooks/scripts/guard-scope-write.sh"
+            self.assertTrue(guard.stat().st_mode & 0o111)
+            guard.chmod(0o644)
+            self.assertEqual(["hooks/scripts/guard-scope-write.sh"], pack.tree_drift(tree))
+            guard.chmod(0o755)
+            (tree / "hooks/hooks.json").write_text("{}\n")
+            self.assertEqual(["hooks/hooks.json"], pack.tree_drift(tree))
+            (tree / "hooks/hooks.json").unlink()
+            self.assertEqual(["hooks/hooks.json"], pack.tree_drift(tree))
+            pack.write_tree(tree)                              # the writer restores both
+            self.assertEqual([], pack.tree_drift(tree))
+            (tree / "scripts/scope-check.sh").unlink()
+            self.assertEqual(["scripts/scope-check.sh"], pack.tree_drift(tree))
+
+    def test_tree_hook_runtime_scripts_exist_and_the_archive_keeps_the_exec_bit(self):
+        with tempfile.TemporaryDirectory(prefix="shode-hook-zip-") as tmp:
+            built = pack.build(Path(tmp))
+            with zipfile.ZipFile(built["path"]) as archive:
+                modes = {i.filename: i.external_attr >> 16 for i in archive.infolist()}
+        self.assertTrue(modes["hooks/scripts/session-start.sh"] & 0o111)
+        self.assertTrue(modes["scripts/scope-check.sh"] & 0o111)
+        self.assertFalse(modes["hooks/scripts/_lib.sh"] & 0o111)   # sourced, never executed
+        self.assertFalse(modes["hooks/hooks.json"] & 0o111)
+
+    def test_codex_manifests_name_their_own_hook_file_never_the_claude_default_path(self):
+        # bd shode-house-ewk, containment C2(a): Codex is pointed at codex-hooks/hooks.json by an explicit
+        # manifest field. This pins only what the repo controls; whether Codex also reads the default
+        # hooks/hooks.json is a host fact, checked live by `verify`, never asserted here.
+        def violations(entries):
+            found = []
+            for name, key_path in ((".codex-plugin/plugin.json", ("hooks",)),
+                                   ("plugin.json", ("extensions", "com.openai", "hooks"))):
+                value = json.loads(entries[name])
+                for key in key_path:
+                    value = value.get(key) if isinstance(value, dict) else None
+                if value != "./codex-hooks/hooks.json" or value.removeprefix("./") not in entries:
+                    found.append(name)
+            if "hooks" in json.loads(entries[".claude-plugin/plugin.json"]):
+                found.append(".claude-plugin/plugin.json")
+            # Cursor (C3): `hooks` replaces default discovery (docs; unconfirmed live), pointing at an empty file.
+            cursor = json.loads(entries[".cursor-plugin/plugin.json"])
+            target = str(cursor.get("hooks", ""))
+            empty = target.startswith("./cursor-hooks/") and target.removeprefix("./") in entries and \
+                json.loads(entries[target.removeprefix("./")]) == {"version": 1, "hooks": {}}
+            if not empty:
+                found.append(".cursor-plugin/plugin.json")
+            return found
+        _, entries = pack.unified_payload()
+        self.assertEqual([], violations(entries))
+        for name in (".codex-plugin/plugin.json", "plugin.json"):      # mutation: point Codex at the Claude file
+            mutated = dict(entries)
+            mutated[name] = entries[name].replace(b"./codex-hooks/hooks.json", b"./hooks/hooks.json")
+            self.assertIn(name, violations(mutated))
+        cursor = json.loads(entries[".cursor-plugin/plugin.json"])
+        mutated = dict(entries)                                         # mutation: Cursor points at the Claude file
+        mutated[".cursor-plugin/plugin.json"] = json.dumps({**cursor, "hooks": "./hooks/hooks.json"}).encode()
+        self.assertIn(".cursor-plugin/plugin.json", violations(mutated))
+        mutated = dict(entries)                                         # mutation: Cursor loses its hooks key
+        mutated[".cursor-plugin/plugin.json"] = json.dumps({k: v for k, v in cursor.items() if k != "hooks"}).encode()
+        self.assertIn(".cursor-plugin/plugin.json", violations(mutated))
+        mutated = dict(entries)                                         # mutation: the Cursor file gains a hook
+        mutated["cursor-hooks/hooks.json"] = json.dumps({"version": 1, "hooks": {"stop": [{"command": "x"}]}}).encode()
+        self.assertIn(".cursor-plugin/plugin.json", violations(mutated))
+
+    @unittest.skipUnless(shutil.which("jq") and shutil.which("bash"), "the hooks need jq and bash")
+    def test_tree_hooks_run_from_the_tree_dormant_without_an_engagement_and_record_a_bind_with_one(self):
+        # bd shode-house-ewk D1/D2/D3(a)/D4: run the COMMITTED tree's hooks the way a marketplace project
+        # sees them: CLAUDE_PLUGIN_ROOT = the tree, a project that has no scripts/ directory.
+        tree = ROOT / "plugins/shode-house"
+
+        def hook(project, script, payload):
+            env = {"PATH": os.environ["PATH"], "HOME": str(project), "CLAUDE_PLUGIN_ROOT": str(tree),
+                   "CLAUDE_PROJECT_DIR": str(project)}
+            return subprocess.run(["bash", str(tree / "hooks/scripts" / script)], input=json.dumps(payload),
+                                  capture_output=True, text=True, env=env, cwd=str(project), timeout=30)
+
+        def tree_files(project):
+            return sorted(p.relative_to(project).as_posix() for p in project.rglob("*"))
+
+        with tempfile.TemporaryDirectory(prefix="shode-tree-hooks-") as tmp:
+            plain = Path(tmp) / "plain"
+            (plain / "src").mkdir(parents=True)
+            before = tree_files(plain)
+            write = {"tool_name": "Write", "tool_input": {"file_path": str(plain / "src/a.txt"), "content": "x"}}
+            calls = [("guard-state-write.sh", write), ("guard-scope-write.sh", write),
+                     ("guard-scope-write.sh", {"tool_name": "Bash", "tool_input": {"command": "git status"}}),
+                     ("guard-scope-write.sh", {"tool_name": "Bash", "tool_input": {
+                         "command": "scripts/scope-check.sh bd-h1 Dave#1 --bind"}}),
+                     ("guard-scope-write.sh", {"tool_name": "Write", "tool_input": {
+                         "file_path": str(plain / ".shode-house/state/x.json"), "content": "{}"}})]
+            for script, payload in calls:                               # D1: nothing is denied, nothing recorded
+                done = hook(plain, script, payload)
+                self.assertEqual(0, done.returncode, (script, payload, done.stderr))
+            git = hook(plain, "guard-scope-write.sh", {"tool_name": "Write", "tool_input": {
+                "file_path": str(plain / ".git/config"), "content": "x"}})
+            self.assertEqual(2, git.returncode, "the always-on .git rule must still deny")
+            started = hook(plain, "session-start.sh", {})                # D4 + B4: status line, no files
+            self.assertEqual(0, started.returncode)
+            self.assertIn("shode-house hooks: ENFORCED", started.stdout)
+            self.assertEqual(0, hook(plain, "collision-scan.sh", {}).returncode)
+            self.assertEqual(before, tree_files(plain), "hooks must not create project state")
+
+            engaged = Path(tmp) / "engaged"                             # D3(a): a project with state, no scripts/
+            (engaged / "src").mkdir(parents=True)
+            (engaged / ".shode-house/scope").mkdir(parents=True)
+            (engaged / ".shode-house/state").mkdir(parents=True)
+            manifest = engaged / ".shode-house/scope/bd-h1.json"
+            manifest.write_text(json.dumps({"schema_version": 1, "bd_id": "bd-h1", "agents": [
+                {"agent": "Dave#1", "allowed_roots": ["src/payment/**"], "owns": ["src/payment/refund.ts"]}]}))
+            (engaged / ".shode-house/state/bd-h1.json").write_text(json.dumps({
+                "bd_id": "bd-h1", "current_phase": "2", "phases": {"2": {"status": "in_progress"}}}))
+            self.assertFalse((engaged / "scripts").exists())
+            outside = {"tool_name": "Write", "tool_input": {"file_path": str(engaged / "src/a.txt"), "content": "x"}}
+            self.assertEqual(0, hook(engaged, "guard-scope-write.sh", outside).returncode)   # D2: helper bundled
+            inside = {"tool_name": "Write", "tool_input": {
+                "file_path": str(engaged / "src/payment/refund.ts"), "content": "x"}}
+            self.assertEqual(2, hook(engaged, "guard-scope-write.sh", inside).returncode)    # a real verdict, not a no-op
+            bind = {"tool_name": "Bash", "agent_id": "agent-AAA", "agent_type": "shode-house:build",
+                    "tool_input": {"command": "scripts/scope-check.sh bd-h1 Dave#1 --bind"}}
+            done = hook(engaged, "guard-scope-write.sh", bind)
+            self.assertEqual(0, done.returncode, done.stderr)
+            self.assertEqual("Dave#1", json.loads(manifest.read_text())["bindings"]["agent-AAA"]["label"])
+
+    def test_antigravity_tree_stays_free_of_claude_hooks(self):
+        _, entries = pack.antigravity_payload()
+        self.assertFalse([p for p in entries if p.startswith(("hooks/", "scripts/", "codex-hooks/", "cursor-hooks/"))])
+
+    def test_cursor_hooks_file_is_empty_cursor_format_and_the_manifest_points_at_it(self):
+        _, entries = pack.unified_payload()
+        self.assertEqual({"version": 1, "hooks": {}}, json.loads(entries["cursor-hooks/hooks.json"]))
+        self.assertEqual("./cursor-hooks/hooks.json", json.loads(entries[".cursor-plugin/plugin.json"])["hooks"])
+        self.assertIn(b"unconfirmed on a live Cursor", entries["HOST-NOTES.md"])
+
+    @unittest.skipUnless(shutil.which("jq") and shutil.which("bash"), "the hooks need jq and bash")
+    def test_missing_scope_check_helper_in_an_engaged_project_keeps_failing_closed(self):
+        # bd shode-house-ewk AC-D2 (amended): a broken install without scripts/scope-check.sh, in a project
+        # with an engagement, keeps the FU-F1 fail-closed deny (guard-scope-write.sh scope_check_rc_deny).
+        with tempfile.TemporaryDirectory(prefix="shode-nohelper-") as tmp:
+            plugin = Path(tmp) / "plugin"
+            shutil.copytree(ROOT / "plugins/shode-house/hooks", plugin / "hooks")
+            shutil.copytree(ROOT / "plugins/shode-house/scripts", plugin / "scripts")
+            project = Path(tmp) / "project"
+            (project / "src").mkdir(parents=True)
+            (project / ".shode-house/scope").mkdir(parents=True)
+            (project / ".shode-house/state").mkdir(parents=True)
+            (project / ".shode-house/scope/bd-h1.json").write_text(json.dumps({"schema_version": 1, "bd_id": "bd-h1", "agents": [
+                {"agent": "Dave#1", "allowed_roots": ["src/payment/**"], "owns": ["src/payment/refund.ts"]}]}))
+            (project / ".shode-house/state/bd-h1.json").write_text(json.dumps({
+                "bd_id": "bd-h1", "current_phase": "2", "phases": {"2": {"status": "in_progress"}}}))
+            payload = {"tool_name": "Write", "tool_input": {"file_path": str(project / "src/a.txt"), "content": "x"}}
+
+            def run():
+                env = {"PATH": os.environ["PATH"], "HOME": str(project), "CLAUDE_PLUGIN_ROOT": str(plugin),
+                       "CLAUDE_PROJECT_DIR": str(project)}
+                return subprocess.run(["bash", str(plugin / "hooks/scripts/guard-scope-write.sh")],
+                                      input=json.dumps(payload), capture_output=True, text=True, env=env,
+                                      cwd=str(project), timeout=30)
+            self.assertEqual(0, run().returncode, "with the helper present an outside write is allowed")
+            (plugin / "scripts/scope-check.sh").unlink()
+            done = run()
+            self.assertEqual(2, done.returncode, done.stderr)
+            self.assertIn("failing CLOSED", done.stderr)
+
+    def test_hook_bundle_refuses_a_missing_hooks_json_or_runtime_script(self):
+        with tempfile.TemporaryDirectory(prefix="shode-hook-src-") as tmp:
+            root = Path(tmp)
+            source_copy(root)
+            self.assertIn("hooks/hooks.json", pack.claude_hook_entries(root))
+            (root / "scripts/lib/lock.sh").unlink()
+            with self.assertRaises(ValueError):
+                pack.claude_hook_entries(root)
 
     def test_no_command_is_registered_and_the_workflow_sources_stay_under_knowledge(self):
         # 4.2.0: `cook` (a skill) is the single entry; the five former commands are workflow references that only
@@ -1142,8 +1353,9 @@ def source_copy(root):
     for name in ("agents", "references", "output-styles", "skills", ".claude-plugin"):
         shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / "release/hosts/codex/hooks", root / "release/hosts/codex/hooks")
-    (root / "scripts").mkdir()
-    for name in ("LICENSE", "scripts/pack-team.py", "scripts/floor.py"):
+    shutil.copytree(ROOT / "hooks", root / "hooks", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "scripts/lib").mkdir(parents=True)
+    for name in ("LICENSE", "scripts/pack-team.py", "scripts/floor.py", *pack.HOOK_RUNTIME_SCRIPTS):
         shutil.copy2(ROOT / name, root / name)
     return root / "scripts/pack-team.py"
 

@@ -11,8 +11,8 @@
 #
 # WHERE THIS RUNS: only where hooks execute -- Claude Code with this plugin's
 # hooks/hooks.json loaded and not switched off by `disableAllHooks: true` (a project can
-# set that, and then no plugin hook runs at all). Not in the generated tree; unconfirmed in
-# Cowork. Detection and accident prevention, defence in depth -- not a guarantee.
+# set that, and then no plugin hook runs at all). Shipped in the generated tree too; unconfirmed
+# in Cowork. Detection and accident prevention, defence in depth -- not a guarantee.
 #
 # `python3 -I -S`: isolated mode, so PYTHON* environment variables, the user site directory
 # and the current directory never reach the interpreter; -S skips the `site` import (the

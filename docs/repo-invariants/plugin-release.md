@@ -36,7 +36,7 @@ Dev-loop: `make validate` is the same gate CI runs. The other targets are `make 
 | `.enforcement-map.json` | `scripts/policy-check.sh` reads it at run time and stops without it |
 | `references` | lazy-loaded knowledge and the data files the scripts read |
 
-The generated tree under `plugins/shode-house` ships less on purpose (no hooks, no runner scripts, its own manifests); the test checks that it never copies a source file the archive leaves out.
+The generated tree under `plugins/shode-house` ships less on purpose (only the two runner scripts the hooks call, its own manifests); the test checks that it never copies a source file the archive leaves out.
 
 **What the test counts as a pointer.** Markdown link targets, `@` imports, `README §`-style section pointers, and any path token whose first segment is a top-level name of this repository, in prose, backticks or a script. A name target projects also use is told apart from ours by existence: `tests/visual/x.png` is the reader's project, `tests/test-lock.sh` is ours. The exemptions (URLs, target-project homes such as `outputs/` and `.shode-house/`, placeholders, a short list of named lines) are declared with their reasons in `tests/test_pack_allowlist.py`.
 

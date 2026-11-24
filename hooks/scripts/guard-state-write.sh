@@ -19,7 +19,7 @@
 #
 # WHERE THIS RUNS: only where hooks execute -- Claude Code with this plugin's
 # hooks/hooks.json loaded, not switched off by `disableAllHooks: true`, and registered with
-# the plugin root quoted. Not in the generated tree; unconfirmed in Cowork. Defence in
+# the plugin root quoted. Shipped in the generated tree too; unconfirmed in Cowork. Defence in
 # depth, not a guarantee.
 #
 # Exit codes -- exit 2 is the ONLY code that blocks (Claude Code docs, quoted in

@@ -699,8 +699,8 @@ class PackAllowlistTest(unittest.TestCase):
             self.assertNotIn(name, known, f"{name} is a TARGET project path and must not be a root name")
 
     def test_generated_tree_sources_are_a_subset_of_the_allowlist(self):
-        # scripts/pack-team.py walks its own roots. It may ship LESS than the zip (no hooks, no
-        # runner scripts, its own manifests), never a source file the zip does not ship.
+        # scripts/pack-team.py walks its own roots. It may ship LESS than the zip (just the two runner scripts the hooks call,
+        # its own manifests), never a source file the zip does not ship.
         spec = importlib.util.spec_from_file_location("pack_team", ROOT / "scripts/pack-team.py")
         pack = importlib.util.module_from_spec(spec); spec.loader.exec_module(pack)
         _, entries = pack.payload()

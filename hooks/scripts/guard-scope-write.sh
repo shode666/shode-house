@@ -98,7 +98,7 @@
 #      3: only where hooks execute, so the host's own permissions.deny is the control that
 #      holds without hooks.
 #      Status: accident prevention, and protection against an injected designer, ONLY WHERE
-#      HOOKS EXECUTE. It is not a control in the generated tree, in Cowork until the user's
+#      HOOKS EXECUTE. It is not a control where hooks do not load (Codex tree route, bd shode-house-on5), in Cowork until the user's
 #      manual check, or in any session with `disableAllHooks: true`; it never stops a
 #      hostile repository, and it fails open without jq. The design runner's own tree check
 #      is the control that holds without hooks.
