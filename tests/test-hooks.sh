@@ -486,6 +486,104 @@ assert_contains "${res#*$'\t'}" "unknown label" "B8 forwarded reason"
 rm -rf "$SBB"
 
 echo
+echo "-- BC: bind-shape conformance table (bd: shode-house-7od) -- plugin-root form, project-relative form, rejected look-alikes --"
+
+# The plugin tree is copied/symlinked into scratch dirs so "root with a space" and "symlinked
+# root" are real roots the hook runs from (its own location is the only trust anchor).
+BCT=$(sandbox)
+mkdir -p "$BCT/plug in"
+cp -R "$REPO_ROOT/hooks" "$REPO_ROOT/scripts" "$BCT/plug in/"
+ln -s "$REPO_ROOT" "$BCT/link-a"
+ln -s "$REPO_ROOT" "$BCT/link-b"
+BCP="$BCT/proj"
+mkdir -p "$BCP/scripts" "$BCT/evil/scripts"
+printf '#!/bin/sh\necho look-alike-ran > "%s/pwn"\n' "$BCT" > "$BCP/scripts/scope-check.sh"
+chmod +x "$BCP/scripts/scope-check.sh"
+init_scope_state "$BCP" "bd-bc" < <(jq -n '{schema_version:1,bd_id:"bd-bc",agents:([range(1;60)|{agent:("C"+tostring),allowed_roots:["src/**"],owns:[]}])}')
+BCMF="$BCP/.shode-house/scope/bd-bc.json"
+BC_N=0
+
+# bc_case <name> <hook-script> <hook-env-CLAUDE_PLUGIN_ROOT or -> <expect-rc> <expect-bound yes|no> <command-with-@L@-and-@BD@> [no-agent]
+bc_case() {
+  local name="$1" hook="$2" envroot="$3" want_rc="$4" want_bound="$5" cmd="$6" noagent="${7:-}"
+  BC_N=$((BC_N + 1))
+  local label="C$BC_N" aid="bc-agent-$BC_N" payload out rc bound
+  cmd="${cmd//@L@/$label}"; cmd="${cmd//@BD@/bd-bc}"; cmd="${cmd//@P@/$BCP}"; cmd="${cmd//@R@/$REPO_ROOT}"
+  cmd="${cmd//@T@/$BCT}"
+  if [ -n "$noagent" ]; then
+    payload=$(jq -n --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
+  else
+    payload=$(jq -n --arg c "$cmd" --arg a "$aid" '{tool_name:"Bash",agent_id:$a,agent_type:"shode-house:build",tool_input:{command:$c}}')
+  fi
+  t_start "BC$BC_N $name -> rc $want_rc, bound=$want_bound"
+  if [ "$envroot" = "-" ]; then
+    out=$(env -u CLAUDE_PLUGIN_ROOT CLAUDE_PROJECT_DIR="$BCP" "$hook" 2>&1 <<<"$payload"); rc=$?
+  else
+    out=$(CLAUDE_PLUGIN_ROOT="$envroot" CLAUDE_PROJECT_DIR="$BCP" "$hook" 2>&1 <<<"$payload"); rc=$?
+  fi
+  bound=$(jq -r --arg a "$aid" --arg l "$label" 'if (.bindings // {})[$a].label == $l then "yes" else "no" end' "$BCMF")
+  if [ "$rc" = "$want_rc" ] && [ "$bound" = "$want_bound" ]; then t_ok; else t_fail "$name: rc=$rc bound=$bound (want rc=$want_rc bound=$want_bound) out=$out"; fi
+}
+
+H="$SCOPE_GUARD"                      # hook invoked at the real root
+HL="$BCT/link-a/hooks/scripts/guard-scope-write.sh"     # hook invoked through a symlinked root
+HS="$BCT/plug in/hooks/scripts/guard-scope-write.sh"    # hook whose root path contains a space
+V='"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh"'
+
+# accepted
+bc_case "plugin-root var form, hook env unset (fail closed)" "$H" -  2 no "$V @BD@ @L@ --bind"
+bc_case "plugin-root var form, hook env relative (fail closed)" "$H" "." 2 no "$V @BD@ @L@ --bind"
+bc_case "plugin-root var form, hook env = its own root"    "$H" "$REPO_ROOT" 0 yes "$V @BD@ @L@ --bind"
+bc_case "absolute root, quoted, equals hook root"          "$H" -  0 yes '"@R@/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "symlinked root: hook via link, command via link"  "$HL" - 0 yes '"@T@/link-a/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "symlinked root: hook via link, command physical" "$HL" - 0 yes '"@R@/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "symlinked root: var form, env via link"           "$HL" "$BCT/link-a" 0 yes "$V @BD@ @L@ --bind"
+bc_case "root with a space: absolute, quoted"              "$HS" - 0 yes '"@T@/plug in/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "root with a space: var form, env = that root"     "$HS" "$BCT/plug in" 0 yes "$V @BD@ @L@ --bind"
+bc_case "project-relative form kept (adopter runtime)"     "$H" -  0 yes 'scripts/scope-check.sh @BD@ @L@ --bind'
+
+# recognised-but-refused / rejected outright
+bc_case "hook env CLAUDE_PLUGIN_ROOT spoofed elsewhere"    "$H" "$BCT/evil" 2 no "$V @BD@ @L@ --bind"
+bc_case "hook env CLAUDE_PLUGIN_ROOT points at a non-dir"  "$H" "$BCT/nope" 2 no "$V @BD@ @L@ --bind"
+bc_case "command-substitution root"                       "$H" -  2 no '"$(echo @R@)/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "backtick root"                                    "$H" -  2 no '"`echo @R@`/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "chained with ;"                                   "$H" -  2 no "$V @BD@ @L@ --bind; touch @T@/pwn"
+bc_case "chained with &&"                                  "$H" -  2 no "$V @BD@ @L@ --bind && touch @T@/pwn"
+bc_case "chained with ||"                                  "$H" -  2 no "$V @BD@ @L@ --bind || touch @T@/pwn"
+bc_case "piped"                                            "$H" -  2 no "$V @BD@ @L@ --bind | cat"
+bc_case "redirect"                                         "$H" -  2 no "$V @BD@ @L@ --bind > @T@/pwn"
+bc_case "export-spoof then bind (;)"                       "$H" -  2 no "export CLAUDE_PLUGIN_ROOT=@T@/evil; $V @BD@ @L@ --bind"
+bc_case "embedded newline"                                 "$H" -  2 no "$V @BD@ @L@
+--bind"
+bc_case "main session (no agent_id), plugin form"          "$H" -  2 no "$V @BD@ @L@ --bind" noagent
+
+# not a bind attempt (runs un-molested, nothing recorded)
+bc_case "unquoted var root"                                "$H" -  0 no '${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh @BD@ @L@ --bind'
+bc_case "var root without braces"                          "$H" -  0 no '"$CLAUDE_PLUGIN_ROOT/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "single-quoted var root"                           "$H" -  0 no "'\${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh' @BD@ @L@ --bind"
+bc_case "unquoted absolute root"                           "$H" -  0 no '@R@/scripts/scope-check.sh @BD@ @L@ --bind'
+bc_case "unquoted absolute root with space"                "$HS" - 0 no '@T@/plug in/scripts/scope-check.sh @BD@ @L@ --bind'
+bc_case "VAR=x prefix (env spoof inside the command text)" "$H" -  0 no "CLAUDE_PLUGIN_ROOT=@T@/evil $V @BD@ @L@ --bind"
+bc_case "env wrapper spoof"                                "$H" -  0 no "env CLAUDE_PLUGIN_ROOT=@T@/evil $V @BD@ @L@ --bind"
+bc_case "traversal after the var"                          "$H" -  0 no '"${CLAUDE_PLUGIN_ROOT}/../evil/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "traversal inside absolute root"                   "$H" -  0 no '"@R@/scripts/../scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "traversal to a sibling tree"                      "$H" -  0 no '"@R@/../evil/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "other symlink to the same root (not the hook's)"  "$H" -  0 no '"@T@/link-b/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "project look-alike, absolute quoted"              "$H" -  0 no '"@P@/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "project look-alike, ./ prefix"                    "$H" -  0 no './scripts/scope-check.sh @BD@ @L@ --bind'
+bc_case "project look-alike, quoted ./ prefix"             "$H" -  0 no '"./scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "project look-alike via CLAUDE_PROJECT_DIR"        "$H" -  0 no '"${CLAUDE_PROJECT_DIR}/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "leading space in quoted root"                     "$H" -  0 no '" ${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "extra trailing token (plugin form)"               "$H" -  0 no "$V @BD@ @L@ --bind --extra"
+bc_case "wrong order (plugin form)"                        "$H" -  0 no "$V --bind @BD@ @L@"
+bc_case "extra trailing token (project form)"              "$H" -  0 no 'scripts/scope-check.sh @BD@ @L@ --bind --extra'
+bc_case "label with a forbidden char"                      "$H" -  0 no "$V @BD@ @L@\$x --bind"
+
+t_start "BC-NOEXEC no look-alike script was ever executed by a conformance case (the guard never runs the command)"
+[ ! -e "$BCT/pwn" ] && t_ok || t_fail "BC-NOEXEC: $BCT/pwn exists"
+rm -rf "$BCT"
+
+echo
 echo "-- Write/Edit tool_name: subagent scope check + main-session non-exemption --"
 
 SBW=$(sandbox)

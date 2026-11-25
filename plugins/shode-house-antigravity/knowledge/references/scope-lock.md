@@ -158,10 +158,12 @@ separate script runtime, never by installing the plugin or by a hook); SessionSt
 or not. The plugin never creates project runtime state implicitly and must not claim this enforcement
 where SessionStart does not report it. Codex and Cursor installs do not rely on these hooks: use the
 harness's scoped ownership, serialized writes and honest enforcement limits.
-The bind command `scripts/scope-check.sh <bd> <label> --bind` is a token the hook recognises and records
-itself; where the project has no `scripts/scope-check.sh` the command then fails to run but the hook has
-already recorded the binding, so the agent proceeds. shortcut(bd:shode-house-7od): bind command is
-project-relative; upgrade → plugin-root-based command.
+The bind command is `"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh" <bd> <label> --bind` (double quotes required, written
+literally; your shell expands the variable). The hook recognises that shape, compares the root against its own
+location (never against the command text) and records the binding itself. A root that is unquoted, a project
+path, a `..` path or any other tree is not recognised and nothing is recorded. The older project-relative
+`scripts/scope-check.sh <bd> <label> --bind` is still recognised for adopters of the separate runtime that ship
+their own `scripts/`; new text and agents use the plugin-root form.
 
 ข้างบนคือ **prose protocol** (chat message + router อ่านเอง) — ชั้นที่ **script บังคับจริง** (เมื่อ SessionStart รายงาน `ENFORCED`; ดู § Enforcement ceiling)
 อยู่ที่ `scripts/scope-check.sh` (per-bd manifest `.shode-house/scope/<bd-id>.json`) +
@@ -176,7 +178,7 @@ project-relative; upgrade → plugin-root-based command.
   เฉพาะ `owns[]` — **ห้ามเติม `allowed_roots[]`** (self-amend ≠ self-expand)
   มี time budget 3 s ต่อการเรียกเหมือน scope check ของ hook: เกิน budget → ถูกปฏิเสธ (`scope-budget`) และ manifest ไม่เปลี่ยน
 - **bind-on-claim**: agent เห็นเฉพาะ label ของตัวเอง (`build`#1`) ไม่เห็น instance id ที่ harness
-  สุ่มให้ตอน subagent spawn — agent รัน `scripts/scope-check.sh <bd> <label> --bind` เป็นก้าวแรก,
+  สุ่มให้ตอน subagent spawn — agent รัน `"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh" <bd> <label> --bind` เป็นก้าวแรก,
   hook (`guard-scope-write.sh`, ADAPTER ของ platform นี้) เห็นทั้ง identity fields ของ harness
   และคำสั่ง Bash พร้อมกัน จึงเป็นคนบันทึกจริง (7 กติกา ระบุด้วย instance_id + label เท่านั้น,
   role/platform เป็น metadata ที่บันทึกไว้เฉยๆ ไม่เข้ากติกา: first-bind-wins, label ต้องมีอยู่ใน

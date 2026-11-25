@@ -34,8 +34,9 @@
 #           writing under outputs/ -- which no manifest ever claims -- working with zero
 #           friction, even though it never bound anywhere).
 #
-#   2. Bash -- recognise the bind-on-claim command `scripts/scope-check.sh <bd> <label>
-#      --bind` and perform the REAL write scope-check.sh's own `cmd_bind` cannot (it has
+#   2. Bash -- recognise the bind-on-claim command `"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh"
+#      <bd> <label> --bind` (plugin-root form; the project-relative `scripts/scope-check.sh
+#      <bd> <label> --bind` stays accepted, see the shapes (P)/(R) at the match below) and perform the REAL write scope-check.sh's own `cmd_bind` cannot (it has
 #      no instance_id -- see that script's own "bind design" header comment). This is the
 #      "hook sees both agent_id/agent_type and the Bash command in one payload" trick from
 #      Part 2 of the brief.
@@ -922,7 +923,7 @@ handle_bash() {
   # (belt + suspenders on top of the literal-space-only regex in (iii)).
   case "$command" in
     *';'*|*'&&'*|*'||'*|*'|'*|*'$('*|*'`'*|*'>'*|*'<'*|*$'\n'*|*$'\t'*|*$'\r'*)
-      printf 'shode-house: bind command rejected -- contains a forbidden shell metacharacter (one of ; && || | $( a backtick, a redirect, or an embedded newline/tab/CR). The binding control plane only ever accepts the exact canonical shape: scripts/scope-check.sh <bd-id> <label> --bind\n' >&2
+      printf 'shode-house: bind command rejected -- contains a forbidden shell metacharacter (one of ; && || | $( a backtick, a redirect, or an embedded newline/tab/CR). The binding control plane only ever accepts the exact canonical shape: "${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh" <bd-id> <label> --bind\n' >&2
       exit 2
       ;;
   esac
@@ -933,14 +934,58 @@ handle_bash() {
   # what let a multi-line command slip through as "canonical" before this fix. A single
   # literal space is the only separator a real single-line invocation of this command
   # would ever contain.
+  # bd: shode-house-7od -- two accepted shapes, both fully anchored, single-space separated:
+  #   (P) plugin-root form, the one agent text teaches:
+  #         "<root>/scripts/scope-check.sh" <bd-id> <label> --bind
+  #       <root> must be EXACTLY one of three literals, compared by string equality AFTER the
+  #       regex captured it (never interpolated into the pattern, never expanded, never
+  #       globbed): the text ${CLAUDE_PLUGIN_ROOT} (unexpanded text -- the agent's
+  #       shell expands it), this hook's own root as invoked (REPO_ROOT), or that root with
+  #       symlinks resolved. The double quotes are REQUIRED (an unquoted root breaks on a
+  #       root with a space and is how a look-alike path slips in); a root that contains
+  #       " $ ` or \ is never offered as the absolute form. Trust comes from this hook's own
+  #       location, never from the command text: whatever the command says, the binding is
+  #       written by the hook's own $SCOPE_CHECK. Anything else in the root position -- a
+  #       project path, "..", another symlink to the root, a VAR=x prefix, an unquoted root
+  #       -- is simply not a recognised bind attempt (falls through to exit 0, no binding).
+  #   (R) project-relative form scripts/scope-check.sh <bd-id> <label> --bind, kept for
+  #       adopters of the separate runtime that ship their own scripts/ (migration note in
+  #       references/scope-lock.md); it grants nothing the plugin form does not, since the
+  #       recorded binding is again written by $SCOPE_CHECK, not by the command's script.
   local bind_re='^scripts/scope-check\.sh[ ]+([A-Za-z0-9][A-Za-z0-9._/-]*)[ ]+([A-Za-z0-9][A-Za-z0-9._#-]*)[ ]+--bind$'
-  if [[ ! "$command" =~ $bind_re ]]; then
-    # mentions both tokens, no forbidden metachar, but not the exact canonical shape --
+  local bind_pre='^"([^"]*)/scripts/scope-check\.sh"[ ]+([A-Za-z0-9][A-Za-z0-9._/-]*)[ ]+([A-Za-z0-9][A-Za-z0-9._#-]*)[ ]+--bind$'
+  local bd label
+  if [[ "$command" =~ $bind_re ]]; then
+    bd="${BASH_REMATCH[1]}"; label="${BASH_REMATCH[2]}"
+  elif [[ "$command" =~ $bind_pre ]]; then
+    local bind_root="${BASH_REMATCH[1]}" root_ok=0 root_phys=""
+    bd="${BASH_REMATCH[2]}"; label="${BASH_REMATCH[3]}"
+    case "$REPO_ROOT" in *'"'*|*'$'*|*'`'*|*'\'*) ;; *) root_phys=$(cd "$REPO_ROOT" 2>/dev/null && pwd -P) ;; esac
+    if [ "$bind_root" = '${CLAUDE_PLUGIN_ROOT}' ]; then
+      # The agent's shell expands this. This hook's own env must name the very tree the hook
+      # runs from: an unset, empty, relative, missing or different root fails CLOSED, because
+      # the command would then run another script than the one that records the binding.
+      _env_root=$(printenv CLAUDE_PLUGIN_ROOT 2>/dev/null)
+      _env_phys=""
+      case "$_env_root" in /*) _env_phys=$(cd "$_env_root" 2>/dev/null && pwd -P) ;; esac
+      if [ -z "$root_phys" ] || [ -z "$_env_phys" ] || [ "$_env_phys" != "$root_phys" ]; then
+        printf 'shode-house: bind command rejected -- CLAUDE_PLUGIN_ROOT is not set to the plugin tree this hook runs from, so the command would not run the helper that records the binding\n' >&2
+        exit 2
+      fi
+      root_ok=1
+    elif [ -n "$root_phys" ] && { [ "$bind_root" = "$REPO_ROOT" ] || [ "$bind_root" = "$root_phys" ]; }; then
+      root_ok=1
+    fi
+    if [ "$root_ok" -ne 1 ]; then
+      # quoted, scope-check.sh-shaped, but not this plugin's root: not a bind attempt.
+      exit 0
+    fi
+  else
+    # mentions both tokens, no forbidden metachar, but not a canonical shape --
     # not recognised as a bind attempt. Let it run un-molested (harmless: scope-check.sh's
     # own cmd_bind is inert, or a plain usage error fires).
     exit 0
   fi
-  local bd="${BASH_REMATCH[1]}" label="${BASH_REMATCH[2]}"
 
   local agent_id role
   agent_id=$(printf '%s' "$input" | jq -r '.agent_id // empty' 2>/dev/null)
@@ -1252,7 +1297,7 @@ handle_subagent() {
     # outsider policy, scoped to just this one resolved bd (the only candidate it could
     # possibly mean).
     apply_outsider_policy "$rel" "$resolved" \
-      "instance_id not bound to any label for bd \"$resolved\" yet -- run scripts/scope-check.sh $resolved <your-label> --bind first"
+      "instance_id not bound to any label for bd \"$resolved\" yet -- run \"\${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh\" $resolved <your-label> --bind first"
     return
   fi
 

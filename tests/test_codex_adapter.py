@@ -85,6 +85,8 @@ class CodexPackageTest(unittest.TestCase):
             "knowledge/skills/workflow/ask/SKILL.md", "skills/ask/SKILL.md",  # tombstone-allow
             # bd shode-house-ewk: the hooks ship in the Claude tree, so the "instruction-only, no hooks" applicability text changed
             "knowledge/references/workflows/init.md",
+            # bd shode-house-7od: the bind command became the plugin-root form; the hook that recognises it ships in this tree
+            "hooks/scripts/guard-scope-write.sh",
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(
