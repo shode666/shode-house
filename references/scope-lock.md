@@ -164,6 +164,10 @@ location (never against the command text) and records the binding itself. A root
 path, a `..` path or any other tree is not recognised and nothing is recorded. The older project-relative
 `scripts/scope-check.sh <bd> <label> --bind` is still recognised for adopters of the separate runtime that ship
 their own `scripts/`; new text and agents use the plugin-root form.
+The hook records the binding on the PreToolUse event, before the command runs. A subagent's shell may not
+have `CLAUDE_PLUGIN_ROOT` set, so the command itself can fail (for example exit 127 because the variable
+expands to nothing); the binding is then already recorded, so proceed. Never improvise another shape: no
+`${VAR:-...}` fallback, no project-relative path, no guessed absolute path.
 
 ข้างบนคือ **prose protocol** (chat message + router อ่านเอง) — ชั้นที่ **script บังคับจริง** (เมื่อ SessionStart รายงาน `ENFORCED`; ดู § Enforcement ceiling)
 อยู่ที่ `scripts/scope-check.sh` (per-bd manifest `.shode-house/scope/<bd-id>.json`) +

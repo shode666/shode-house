@@ -34,9 +34,11 @@
 #           writing under outputs/ -- which no manifest ever claims -- working with zero
 #           friction, even though it never bound anywhere).
 #
-#   2. Bash -- recognise the bind-on-claim command `"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh"
-#      <bd> <label> --bind` (plugin-root form; the project-relative `scripts/scope-check.sh
-#      <bd> <label> --bind` stays accepted, see the shapes (P)/(R) at the match below) and perform the REAL write scope-check.sh's own `cmd_bind` cannot (it has
+#   2. Bash -- recognise the bind-on-claim command
+#      `"${CLAUDE_PLUGIN_ROOT}/scripts/scope-check.sh" <bd> <label> --bind` (plugin-root
+#      form; the project-relative `scripts/scope-check.sh <bd> <label> --bind` stays
+#      accepted, see the shapes (P)/(R) at the match below) and perform the REAL write
+#      scope-check.sh's own `cmd_bind` cannot (it has
 #      no instance_id -- see that script's own "bind design" header comment). This is the
 #      "hook sees both agent_id/agent_type and the Bash command in one payload" trick from
 #      Part 2 of the brief.
@@ -958,15 +960,15 @@ handle_bash() {
   if [[ "$command" =~ $bind_re ]]; then
     bd="${BASH_REMATCH[1]}"; label="${BASH_REMATCH[2]}"
   elif [[ "$command" =~ $bind_pre ]]; then
-    local bind_root="${BASH_REMATCH[1]}" root_ok=0 root_phys=""
+    local bind_root="${BASH_REMATCH[1]}" root_ok=0 root_phys="" _env_root="" _env_phys=""
     bd="${BASH_REMATCH[2]}"; label="${BASH_REMATCH[3]}"
     case "$REPO_ROOT" in *'"'*|*'$'*|*'`'*|*'\'*) ;; *) root_phys=$(cd "$REPO_ROOT" 2>/dev/null && pwd -P) ;; esac
     if [ "$bind_root" = '${CLAUDE_PLUGIN_ROOT}' ]; then
       # The agent's shell expands this. This hook's own env must name the very tree the hook
       # runs from: an unset, empty, relative, missing or different root fails CLOSED, because
       # the command would then run another script than the one that records the binding.
-      _env_root=$(printenv CLAUDE_PLUGIN_ROOT 2>/dev/null)
-      _env_phys=""
+      # Builtin read of this hook's own env (no PATH lookup); the subshell fails on unset or empty -> fails closed.
+      _env_root=$( (printf '%s' "${CLAUDE_PLUGIN_ROOT:?plugin root unset}") 2>/dev/null )
       case "$_env_root" in /*) _env_phys=$(cd "$_env_root" 2>/dev/null && pwd -P) ;; esac
       if [ -z "$root_phys" ] || [ -z "$_env_phys" ] || [ "$_env_phys" != "$root_phys" ]; then
         printf 'shode-house: bind command rejected -- CLAUDE_PLUGIN_ROOT is not set to the plugin tree this hook runs from, so the command would not run the helper that records the binding\n' >&2
