@@ -71,6 +71,28 @@ assert_rc()    { if [ "$1" -eq "$2" ]; then t_ok; else t_fail "$3 -- exit code $
 
 sandbox() { local d; d=$(mktemp -d -t scopecheck-test.XXXXXX); printf '%s' "$d"; }
 
+# bd:shode-house-2sn -- the two MUTATION cases edit the REAL $SCRIPT in place and must hand
+# it back byte- and mode-identical. mode_of is portable (BSD stat on macOS, GNU on Linux);
+# ORIG_MODE is recorded before any mutation. restore_script puts the content back with
+# `cat >` (same inode, so the mode is never replaced by mktemp's 0600) and then re-asserts
+# the recorded mode explicitly. The EXIT/INT/TERM trap runs it on interrupt and failure
+# paths too; it is idempotent and a no-op once BACKUP is cleared.
+mode_of() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
+ORIG_MODE=$(mode_of "$SCRIPT")
+BACKUP=""
+restore_script() {
+  if [ -n "${BACKUP:-}" ] && [ -f "$BACKUP" ]; then
+    cat "$BACKUP" > "$SCRIPT"
+    rm -f "$BACKUP"
+    BACKUP=""
+  fi
+  rm -f "$SCRIPT.bak"
+  chmod "$ORIG_MODE" "$SCRIPT" 2>/dev/null
+}
+trap restore_script EXIT
+trap 'restore_script; exit 130' INT
+trap 'restore_script; exit 143' TERM
+
 # wd <seconds> <command...> -- the suite's watchdog: the command runs in its own process
 # group, and at the deadline the WHOLE group is killed (status 142), so no child outlives it
 # holding the $(...) pipe (Chris U21 I-3). Same helper as in test-hooks.sh.
@@ -1448,9 +1470,7 @@ else
   assert_contains "$mutated_out" "ALLOW" "mutated ownership check should now (wrongly) ALLOW"
 fi
 
-mv "$BACKUP" "$SCRIPT"
-chmod +x "$SCRIPT"
-rm -f "$SCRIPT.bak"
+restore_script
 restored_out=$("$SCRIPT" bd-mut-a Dave#1 src/payments/handler.py 2>&1); restored_rc=$?
 assert_rc "$restored_rc" 1 "restore: scope-check.sh back to original, DENY again for a path owned by someone else"
 rm -rf "$D"
@@ -1484,9 +1504,7 @@ else
   assert_rc "$mutated_rc" 0 "mutated --verify wrongly reports no conflict"
 fi
 
-mv "$BACKUP" "$SCRIPT"
-chmod +x "$SCRIPT"
-rm -f "$SCRIPT.bak"
+restore_script
 restored_out=$("$SCRIPT" bd-mut-b Dave#1 ci.yml --verify 2>&1); restored_rc=$?
 assert_rc "$restored_rc" 3 "restore: scope-check.sh back to original, real drift CONFLICTs again"
 rm -rf "$D"
@@ -1502,6 +1520,12 @@ listing=$(unzip -l "$plugin" 2>/dev/null)
 assert_contains "$listing" "references/scope/manifest.schema.json" "packed artifact must ship the manifest schema"
 assert_contains "$listing" "references/scope/example.manifest.json" "packed artifact must ship the example manifest"
 assert_contains "$listing" "scripts/scope-check.sh" "packed artifact must ship scope-check.sh"
+
+# ---------------------------------------------------------------------------
+t_start "bd:shode-house-2sn: the MUTATION cases left scripts/scope-check.sh in its original mode"
+restore_script
+now_mode=$(mode_of "$SCRIPT")
+[ "$now_mode" = "$ORIG_MODE" ] && t_ok || t_fail "scripts/scope-check.sh mode is $now_mode, was $ORIG_MODE before the run"
 
 printf '\n== %d passed, %d failed ==\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -509,9 +509,25 @@ bad_trials=0
 for _trial in $(seq 1 8); do
   D=$(sandbox); lockd="$D/.lock-rr"
   seed_dead_lock "$lockd" "stale" >/dev/null
+  # bd:shode-house-zqc -- result independent of process start timing. Whichever caller
+  # wins the .recovering claim parks at LOCK_RECOVER_SYNC_PREMV WITH marker + lock still
+  # present (only the winner reaches that hook; losers return before it). It is released
+  # only once the 4 losers have all printed RECOVERY_IN_PROGRESS, so a late-starting caller
+  # can no longer arrive after the winner finished and see "nothing to recover". Every
+  # wait is bounded (10 s) and a timeout counts the trial as bad -- it never hangs.
+  sync="$D/sync"
   for i in 1 2 3 4 5; do
-    bash "$LOCKLIB" recover "$lockd" --reason "dual-recover-$i" >"$D/out.$i" 2>&1 &
+    LOCK_RECOVER_SYNC_PREMV="$sync" bash "$LOCKLIB" recover "$lockd" --reason "dual-recover-$i" >"$D/out.$i" 2>&1 &
   done
+  n=0
+  while [ ! -e "${sync}.ready" ]; do n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1; done
+  if [ -e "${sync}.ready" ]; then
+    n=0
+    while [ "$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')" -lt 4 ]; do
+      n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1
+    done
+  fi
+  : > "${sync}.go"   # always release the parked winner (also on timeout), then reap everyone
   wait
   recovered=$(grep -l '^RECOVERED' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
   in_progress=$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
