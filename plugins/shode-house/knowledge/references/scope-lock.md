@@ -166,7 +166,9 @@ path, a `..` path or any other tree is not recognised and nothing is recorded. T
 their own `scripts/`; new text and agents use the plugin-root form.
 The hook records the binding on the PreToolUse event, before the command runs. A subagent's shell may not
 have `CLAUDE_PLUGIN_ROOT` set, so the command itself can fail (for example exit 127 because the variable
-expands to nothing); the binding is then already recorded, so proceed. Never improvise another shape: no
+expands to nothing). Proceed as bound only when the hook accepted the bind (PreToolUse allowed it and the
+binding is recorded) and your own shell then failed. A hook rejection (exit 2, "bind command rejected")
+records nothing: do not proceed as bound; report it to the router. Never improvise another shape: no
 `${VAR:-...}` fallback, no project-relative path, no guessed absolute path.
 
 ข้างบนคือ **prose protocol** (chat message + router อ่านเอง) — ชั้นที่ **script บังคับจริง** (เมื่อ SessionStart รายงาน `ENFORCED`; ดู § Enforcement ceiling)

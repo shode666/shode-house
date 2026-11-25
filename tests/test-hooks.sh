@@ -493,6 +493,9 @@ echo "-- BC: bind-shape conformance table (bd: shode-house-7od) -- plugin-root f
 BCT=$(sandbox)
 mkdir -p "$BCT/plug in"
 cp -R "$REPO_ROOT/hooks" "$REPO_ROOT/scripts" "$BCT/plug in/"
+# The physical spelling of the repo root, resolved here so the "command physical" case stays
+# physical when the suite itself is run from a symlinked path (macOS /tmp -> /private/tmp).
+REPO_ROOT_PHYS="$(cd "$REPO_ROOT" && pwd -P)"
 ln -s "$REPO_ROOT" "$BCT/link-a"
 ln -s "$REPO_ROOT" "$BCT/link-b"
 BCP="$BCT/proj"
@@ -509,6 +512,7 @@ bc_case() {
   BC_N=$((BC_N + 1))
   local label="C$BC_N" aid="bc-agent-$BC_N" payload out rc bound
   cmd="${cmd//@L@/$label}"; cmd="${cmd//@BD@/bd-bc}"; cmd="${cmd//@P@/$BCP}"; cmd="${cmd//@R@/$REPO_ROOT}"
+  cmd="${cmd//@RP@/$REPO_ROOT_PHYS}"
   cmd="${cmd//@T@/$BCT}"
   if [ -n "$noagent" ]; then
     payload=$(jq -n --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
@@ -536,7 +540,7 @@ bc_case "plugin-root var form, hook env relative (fail closed)" "$H" "." 2 no "$
 bc_case "plugin-root var form, hook env = its own root"    "$H" "$REPO_ROOT" 0 yes "$V @BD@ @L@ --bind"
 bc_case "absolute root, quoted, equals hook root"          "$H" -  0 yes '"@R@/scripts/scope-check.sh" @BD@ @L@ --bind'
 bc_case "symlinked root: hook via link, command via link"  "$HL" - 0 yes '"@T@/link-a/scripts/scope-check.sh" @BD@ @L@ --bind'
-bc_case "symlinked root: hook via link, command physical" "$HL" - 0 yes '"@R@/scripts/scope-check.sh" @BD@ @L@ --bind'
+bc_case "symlinked root: hook via link, command physical" "$HL" - 0 yes '"@RP@/scripts/scope-check.sh" @BD@ @L@ --bind'
 bc_case "symlinked root: var form, env via link"           "$HL" "$BCT/link-a" 0 yes "$V @BD@ @L@ --bind"
 bc_case "root with a space: absolute, quoted"              "$HS" - 0 yes '"@T@/plug in/scripts/scope-check.sh" @BD@ @L@ --bind'
 bc_case "root with a space: var form, env = that root"     "$HS" "$BCT/plug in" 0 yes "$V @BD@ @L@ --bind"
