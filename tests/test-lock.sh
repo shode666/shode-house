@@ -521,17 +521,20 @@ for _trial in $(seq 1 8); do
   done
   n=0
   while [ ! -e "${sync}.ready" ]; do n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1; done
+  trial_timeout=0
   if [ -e "${sync}.ready" ]; then
     n=0
     while [ "$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')" -lt 4 ]; do
-      n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1
+      n=$((n + 1)); [ "$n" -ge 100 ] && { trial_timeout=1; break; }; sleep 0.1
     done
+  else
+    trial_timeout=1   # the hook never parked a winner: the deterministic path did not run
   fi
   : > "${sync}.go"   # always release the parked winner (also on timeout), then reap everyone
   wait
   recovered=$(grep -l '^RECOVERED' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
   in_progress=$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
-  [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || bad_trials=$((bad_trials + 1))
+  [ "$trial_timeout" = "0" ] && [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || bad_trials=$((bad_trials + 1))
   rm -rf "$D"
 done
 assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS out of 5 concurrent recovers -- got $bad_trials bad trial(s)"
