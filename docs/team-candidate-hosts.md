@@ -9,7 +9,7 @@ One tree serves four hosts:
 | Host | Manifest | What is discovered |
 |---|---|---|
 | Claude Code | `.claude-plugin/plugin.json` | 20 flat skills, 6 agent role contracts, `/shode-house:cook` (4.2.0: no commands); the guard hooks (`hooks/hooks.json`) |
-| Codex | `.codex-plugin/plugin.json` | 24 skills (agent files are not a Codex concept); observed on Codex 0.155.1 tree install: the root portable `plugin.json` is picked and no plugin hooks load (bd `shode-house-on5`) |
+| Codex | Root portable `plugin.json` with `.codex-plugin/plugin.json` fallback | 20 skills on the Codex 0.155.1 tree install. Codex selected the root manifest and loaded no plugin hooks (bd `shode-house-on5`). |
 | Cursor | `.cursor-plugin/plugin.json` | skills + agents by folder discovery; `commands: []` (4.2.0: no host registers a command; cook is a skill); `hooks` -> empty `cursor-hooks/hooks.json` (documented: a manifest field replaces default discovery; unconfirmed on a live Cursor) |
 | Antigravity | root `plugin.json` | skills only; agents are knowledge resources, not native registrations |
 

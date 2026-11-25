@@ -129,16 +129,16 @@ POINTER = ("No shode-house safety floor in this context (a main session without 
 # erratum 1 §5.8.2 (UD R37 option A). ASCII, <= 200 chars (Cowork).
 TREE_DESCRIPTION = "Shode House: full expert team on Claude Code; skills-only, single session on Cursor."
 ANTIGRAVITY_DESCRIPTION = "Shode House: portable six-role software-house team for Antigravity."
-CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts, fresh review workers, "
-                     "and trusted Python-backed structured-write guards.")
+CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts and fresh review workers. "
+                     "Codex 0.155.1 did not load plugin hooks on the marketplace tree route.")
 # erratum 1 §5.8.1 "HOST-NOTES" bullets, persona-free; Antigravity per W0 P4 (agy 1.2.2 validate).
 HOST_BULLETS = (
     "- Claude Code: `.claude-plugin` manifest, flat skills, agents; no commands (`/shode-house:cook` is the "
     "entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to "
     "native registered agents.\n"
     "- Codex: the `cook` skill coordinates genuine separate workers using the six generated role contracts. "
-    "After the user trusts the hooks and Python 3 is available, lifecycle hooks restore context after compaction "
-    "and guard direct structured writes. Hook text is not "
+    "Codex 0.155.1 selected the root portable manifest on the marketplace tree route and loaded no plugin hooks. "
+    "On a route that loads the bundle, lifecycle hooks require trust and Python 3. Hook text is not "
     "authentication; shell commands and per-role model, tool and scope isolation stay ADVISORY-ONLY.\n"
     "- Cursor: skills run in one session; there is no verified router. Never replace "
     "delegation with role-play or claim independent review without a genuine separate worker.\n"

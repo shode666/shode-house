@@ -16,7 +16,8 @@ closes. Agents are spawned as `shode-house:<id>`; the 7 domain experts are domai
 agent body and the router style (`scripts/floor.py --check --require`). **Breaking:** the 18 old ids no longer resolve (no
 stub agent files) — see § Migration from 4.0.0 below; the 4.0.1 number was fixed by the maintainer. Claude Code uses the
 router style and native registered agents. Codex structurally packages `cook` as a coordinator for genuine separate workers,
-with trusted Python-backed lifecycle hooks for direct structured writes; Cursor remains an unverified one-session adapter and Antigravity packaging
+with a Python-backed hook bundle. Codex 0.155.1 did not load that bundle on the marketplace tree route.
+Cursor remains an unverified one-session adapter and Antigravity packaging
 is a separate artifact. The 4.0.1 routing and review wiring is *designed*, not yet *measured* (see § What is designed vs what is measured).
 
 4.0.0 introduced the router style and the safety floor (the 3.x `orchestrator` agent and the `oliver` style were retired
@@ -194,8 +195,10 @@ at an empty `cursor-hooks/hooks.json` (Cursor's documented rule is that a manife
 but Cursor's "Include Third-Party Plugins" path may load hooks from a user's Claude Code install; that is unconfirmed
 (tracked by the bd issue whose id ends `-wda`). Antigravity ships none. The Cursor containment is not confirmed on a live host
 (pending host verification). If the plugin's scope helper `scripts/scope-check.sh` is missing from an installed copy,
-the scope guard fails closed (writes are denied until the plugin is reinstalled) only in a project with an engagement
-and an in-progress tracker task; with no in-progress tracker task it allows. See the hooks security notes below.
+the scope guard denies main-session writes when project state under `.shode-house/state/`
+has a task in phase `in_progress` and allows them otherwise. It denies writes from a
+subagent with a scope manifest and allows writes from a subagent without one.
+See the hooks security notes below.
 
 ### Codex
 Add the repo as a plugin marketplace (`.claude-plugin/marketplace.json` is the shared catalog);

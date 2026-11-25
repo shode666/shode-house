@@ -29,6 +29,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ### Added
 
+- **Claude Code marketplace hooks.** This reverses the 3.17.1 decision to exclude hooks from the marketplace tree. After updating, Claude Code automatically runs five hook scripts at their registered events: `session-start.sh`, `collision-scan.sh`, `guard-state-write.sh`, `guard-scope-write.sh` and `stop-integrity.sh`. Set `"disableAllHooks": true` in Claude Code user or project settings to disable hooks. Cursor points to an empty hook manifest and live Cursor behavior is pending. Codex 0.155.1 loaded no plugin hooks via the marketplace tree route.
 - A lazy interface-quality critique card for the `design` role: precise typography, composition, affordance, feedback and motion vocabulary; optional background directions with brand, legibility, performance and reduced-motion constraints; and contextual anti-slop prompts that require concrete task, hierarchy, brand or accessibility harm instead of banning familiar aesthetics.
 - Focused regression coverage that keeps anti-slop review contextual and binds UX critique to observable critical-user-flow evidence.
 
@@ -154,7 +155,7 @@ The one table is `skills/discipline/shode-house-routing/ownership.md` § Formerl
 - U23-5: `test_reference_toc` added to the CI #27 always-required loop; 28 shipped references over 100 lines got a table of contents that must match their headings.
 - CI #21 root-only floor 123 → 190; `eval/core-set.sh` selects `core-4.0` for a 4.x checkout (core-3.17 stays frozen).
 
-### Security notes (hooks; Claude Code `.plugin` distribution only — the marketplace tree ships no hooks)
+### Security notes (3.17-era Claude Code distribution; marketplace hooks added in 4.2.0)
 
 - Hooks are a control only where hooks execute; `disableAllHooks`, control of the hook's environment before its first command (PATH-chosen bash/jq/python3, `BASH_ENV`, `SHELLOPTS` with `noexec` or `onecmd`, `SHELLOPTS` with `xtrace` and a `PS4` that runs a command substitution or assigns a variable the scripts do not reset, exported functions, `DYLD_*`/`LD_PRELOAD`; `BASHOPTS` is listed with them) and a crashing hook are equivalent full bypasses; see README § Security notes. Both write guards and `scripts/scope-check.sh` turn `errexit`, `keyword`, `noglob` and `xtrace` off on their first command, and at their start clear `HOME`, `FUNCNEST`, `TMOUT`, `GLOBIGNORE`, `EXECIGNORE`, `CDPATH`, `POSIXLY_CORRECT` and `BASH_COMPAT` and reset `IFS` (the state guard does this before its jq check). Writes into `.git`, `.git/**` and pointed git dirs are denied where hooks run; for protection wherever Claude Code enforces permissions, add the five `permissions.deny` forms in README (`Edit(/.git)`, `Edit(/.git/**)`, `Edit(**/.git)`, `Edit(**/.git/**)`, `Edit(//<common git dir>/**)`; the two single-file forms are inferred from the documented gitignore semantics, and the hooks deny those files regardless).
 - **`jq` is required for hook enforcement; every session shows the status** (decision U23 item 2): the SessionStart hook prints one line, shown to the user (`systemMessage`) and to the model (`additionalContext`), in every project: `ENFORCED` only when jq is on PATH and runs a test program of the guards' kind (JSON input and a regex test) within 0.25 s (the guards call jq many times per tool call (up to 11 in a row with no time check, on a Bash bind), and a hook cut off by the 5 s timeout lets the call through), `hooks/scripts/_casefold.sh` loads and, on macOS, `/usr/bin/perl` with `Unicode::Normalize` runs; otherwise `ADVISORY-ONLY`, naming the first missing or broken dependency and saying that the Write/Edit scope and state guards are NOT enforced (static text, no environment value echoed; `.degraded` gets the same line in a project with an engagement). The guards' verdicts are unchanged: a missing jq still fails open (Hook Charter §7) with a `.degraded` line, and a jq that is present but cannot run still makes the two write guards deny the input they cannot judge (U19). Before 4.0.0 SessionStart was silent unless jq was missing or a torn write was found. README lists jq under the install prerequisites. SessionStart also stops its torn-write scan at 5 s (cut off: a static notice and a `.degraded` line) and shows a torn-write task id only if it matches `[A-Za-z0-9._/:-]{1,64}` (otherwise a static placeholder; at most 10 ids, then `+N more`; a list longer than 4096 bytes ends in `+more (…)`).
@@ -190,6 +191,8 @@ The one table is `skills/discipline/shode-house-routing/ownership.md` § Formerl
 - Cost of the exercise: 79 live runs, USD 15.15, sonnet only. Adjudication: `outputs/shode-house-8ss/54-floor-base-adjudication.md` and `56-d2-adjudication.md`.
 
 ## [3.17.1] — 2026-09-24
+
+The marketplace hook exclusions described below applied to 3.17.1. Beginning with 4.2.0, the Claude Code marketplace tree ships hooks and their required helpers.
 
 ### Fixed
 

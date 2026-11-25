@@ -340,12 +340,9 @@ PINS = {
      "8633145a5ff1aba9f95c3bfaa4dc252951323b04bd52258265eba128ab3ef9eb"):
         "FP: Sentinel W10a fix-2 final table #8 (security-axis read); 4.2.0 re-pin: the generated footer of the entry skill, only its directory name changed (ask -> cook; was ba9174c967d8...), no other byte -- `secure` to confirm the rename-only diff",
     # 4.2.0 (shode-house-wy5): the five commands moved to references/workflows/ (read through cook), so the lint now scans
-    # them (commands/** was out of scope, X12). These four units are moved verbatim, byte for byte, and are lexical hits only:
+    # them (commands/** was out of scope, X12). The remaining units were moved verbatim and are lexical hits only:
     # each is a prohibition ("Do not install a runner...", "Do not require Beads", a SKIP rule), none relaxes the floor.
-    # Pinned pending the `secure` axis confirmation of the four units (not yet read by the security axis).
-    ("references/workflows/init.md",
-     "642abdf66e718f596c6b758b31e3d95d92e7d64ffdb3c8b1fb091c8c0f0bd18c"):
-        "FP (moved verbatim from commands/init.md; prohibition against installing a runner/hooks, not a relaxation); secure to confirm",
+    # Pinned pending `secure` axis confirmation.
     ("references/workflows/init.md",
      "af68f664b696eab58aeaea5ff900b88534d15fb203bc44d7bbbc64aa96652bdc"):
         "FP (moved verbatim from commands/init.md; rule 11 'Do not require marker/config files, hooks or a generated runner merely to satisfy the plugin'); secure to confirm",

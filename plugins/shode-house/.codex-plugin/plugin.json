@@ -8,7 +8,7 @@
   "homepage": "https://github.com/shode666/shode-house",
   "repository": "https://github.com/shode666/shode-house",
   "license": "MIT",
-  "description": "Shode House for Codex: coordinator, six role contracts, fresh review workers, and trusted Python-backed structured-write guards.",
+  "description": "Shode House for Codex: coordinator, six role contracts and fresh review workers. Codex 0.155.1 did not load plugin hooks on the marketplace tree route.",
   "skills": "./skills/",
   "hooks": "./codex-hooks/hooks.json",
   "extensions": {
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Shode House",
     "shortDescription": "The full software-house expert team",
-    "longDescription": "Shode House for Codex: coordinator, six role contracts, fresh review workers, and trusted Python-backed structured-write guards.",
+    "longDescription": "Shode House for Codex: coordinator, six role contracts and fresh review workers. Codex 0.155.1 did not load plugin hooks on the marketplace tree route.",
     "developerName": "shode666",
     "category": "Developer Tools",
     "capabilities": [
