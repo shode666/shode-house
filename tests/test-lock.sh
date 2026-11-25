@@ -516,25 +516,47 @@ for _trial in $(seq 1 8); do
   # can no longer arrive after the winner finished and see "nothing to recover". Every
   # wait is bounded (10 s) and a timeout counts the trial as bad -- it never hangs.
   sync="$D/sync"
+  # TEMPORARY diagnostics (shode-house-zqc): pids, phase timing, per-process rc; verdict logic unchanged.
+  rr_pids=""; rr_which="none"; rr_t0=$SECONDS
   for i in 1 2 3 4 5; do
     LOCK_RECOVER_SYNC_PREMV="$sync" bash "$LOCKLIB" recover "$lockd" --reason "dual-recover-$i" >"$D/out.$i" 2>&1 &
+    rr_pids="$rr_pids $!"
   done
   n=0
   while [ ! -e "${sync}.ready" ]; do n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1; done
+  rr_t1=$SECONDS; rr_ready_at_check=0; [ -e "${sync}.ready" ] && rr_ready_at_check=1
   trial_timeout=0
   if [ -e "${sync}.ready" ]; then
     n=0
     while [ "$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')" -lt 4 ]; do
-      n=$((n + 1)); [ "$n" -ge 100 ] && { trial_timeout=1; break; }; sleep 0.1
+      n=$((n + 1)); [ "$n" -ge 100 ] && { trial_timeout=1; rr_which="losers<4 (wait 2 expired)"; break; }; sleep 0.1
     done
   else
     trial_timeout=1   # the hook never parked a winner: the deterministic path did not run
+    rr_which="ready never appeared (wait 1 expired)"
   fi
+  rr_t2=$SECONDS
+  rr_listing=""
+  [ "$trial_timeout" = "1" ] && rr_listing=$( { echo "--- ls -la lock dir (pre-release)"; ls -la "$lockd" 2>&1; echo "--- ls -la ${lockd}.recovering (pre-release)"; ls -la "${lockd}.recovering" 2>&1; echo "--- ls -la sandbox (pre-release)"; ls -la "$D" 2>&1; } )
   : > "${sync}.go"   # always release the parked winner (also on timeout), then reap everyone
-  wait
+  rr_rcs=""; for rr_p in $rr_pids; do wait "$rr_p" 2>/dev/null; rr_rcs="$rr_rcs $?"; done
   recovered=$(grep -l '^RECOVERED' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
   in_progress=$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
-  [ "$trial_timeout" = "0" ] && [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || bad_trials=$((bad_trials + 1))
+  [ "$trial_timeout" = "0" ] && [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || {
+    bad_trials=$((bad_trials + 1))
+    {
+      echo "[DIAG-rr] ===== bad trial $_trial ====="
+      echo "[DIAG-rr] expired wait : $rr_which"
+      echo "[DIAG-rr] elapsed s    : wait1(ready)=$((rr_t1 - rr_t0)) wait2(losers)=$((rr_t2 - rr_t1)) total-to-reap=$((SECONDS - rr_t0)) (SECONDS granularity)"
+      echo "[DIAG-rr] ready existed at wait1 end: $rr_ready_at_check ; now: $([ -e "${sync}.ready" ] && echo 1 || echo 0)"
+      echo "[DIAG-rr] counts       : RECOVERED=$recovered RECOVERY_IN_PROGRESS=$in_progress trial_timeout=$trial_timeout"
+      echo "[DIAG-rr] pids=$rr_pids ; exit codes (same order)=$rr_rcs"
+      for i in 1 2 3 4 5; do echo "[DIAG-rr] --- out.$i:"; sed 's/^/[DIAG-rr]   /' "$D/out.$i" 2>&1; done
+      if [ -n "$rr_listing" ]; then printf '%s\n' "$rr_listing" | sed 's/^/[DIAG-rr] /'; else echo "[DIAG-rr] (no pre-release listing: not a wait timeout)"; fi
+      echo "[DIAG-rr] --- ls -la sandbox (post-reap)"; ls -la "$D" 2>&1 | sed 's/^/[DIAG-rr] /'
+      echo "[DIAG-rr] --- ls -la lock dir / marker (post-reap)"; ls -la "$lockd" "${lockd}.recovering" 2>&1 | sed 's/^/[DIAG-rr] /'
+    } >&2
+  }
   rm -rf "$D"
 done
 assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS out of 5 concurrent recovers -- got $bad_trials bad trial(s)"
