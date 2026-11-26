@@ -1,5 +1,6 @@
 ---
 name: review-checklist
+user-invocable: false
 description: Coordinate independent review of an implemented change by code, runtime, spec, security and domain with severity and merge gates, not self-approval.
 ---
 

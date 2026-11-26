@@ -1,5 +1,6 @@
 ---
 name: shode-house-workflow
+user-invocable: false
 description: Coordinate multi-phase delivery with phase gates, recorded approvals, run recovery and drift detection, governing how work proceeds, not who owns it.
 ---
 

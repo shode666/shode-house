@@ -1,5 +1,6 @@
 ---
 name: data-migration
+user-invocable: false
 description: Plan and carry out a schema or data migration, such as DDL, backfill, dual write or expand-contract rollout, with rehearsed rollback and extra care for money and regulated data. Not for ordinary SQL queries, disposable local databases or a manual one-row production fix.
 ---
 

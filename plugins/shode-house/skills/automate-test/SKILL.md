@@ -1,5 +1,6 @@
 ---
 name: automate-test
+user-invocable: false
 description: Set up a project's test automation strategy and infrastructure, meaning the mix of unit, integration and end-to-end tests, CI gates and thresholds. Not for the tests of a single change, one changed screen, or spikes and one-off scripts.
 ---
 

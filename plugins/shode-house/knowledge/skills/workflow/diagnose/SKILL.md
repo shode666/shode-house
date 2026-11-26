@@ -1,5 +1,6 @@
 ---
 name: diagnose
+user-invocable: false
 description: Debug an error, crash, failing test, wrong output, regression or slowdown (พัง, ไม่ทำงาน, ช้า, ทำไมถึง, bug) by reproducing and isolating the root cause before fixing. For live production impact, use incident.
 ---
 

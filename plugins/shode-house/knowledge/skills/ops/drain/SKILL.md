@@ -1,5 +1,6 @@
 ---
 name: drain
+user-invocable: false
 description: Batch-drain ready tickets with isolated workers, independent review, serial merge and evidenced closure (จัดงานที่พร้อม, ปิดงานค้าง). For work not split into concrete, independent tickets, use decompose.
 ---
 

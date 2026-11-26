@@ -1,5 +1,6 @@
 ---
 name: decompose
+user-invocable: false
 description: Split an agreed, signed-off scope into small, independently verifiable outcome slices with owners, acceptance criteria and explicit dependencies. Not for work whose finished shape is still unclear, tasks already small, or a backlog already verified and ready.
 ---
 

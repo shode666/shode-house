@@ -50,6 +50,18 @@ class CookSurfaceTest(unittest.TestCase):
     def setUpClass(cls):
         cls.trees = {"main": pack.unified_payload()[1], "antigravity": pack.antigravity_payload()[1]}
 
+    def test_marketplace_skill_metadata_leaves_only_cook_user_invocable(self):
+        for host, entries in self.trees.items():
+            with self.subTest(host=host):
+                visible = set()
+                for path, body in entries.items():
+                    if not re.fullmatch(r"skills/[^/]+/SKILL\.md", path):
+                        continue
+                    header = body.decode().split("---", 2)[1]
+                    if "user-invocable: false" not in header.splitlines():
+                        visible.add(Path(path).parent.name)
+                self.assertEqual({"cook"}, visible)
+
     def test_no_tree_path_is_named_ask_and_no_tree_ships_a_command(self):
         for host, entries in self.trees.items():
             with self.subTest(host=host):

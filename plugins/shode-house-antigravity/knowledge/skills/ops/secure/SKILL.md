@@ -1,5 +1,6 @@
 ---
 name: secure
+user-invocable: false
 description: Threat model and review a design or change that crosses a meaningful security boundary, such as authentication, authorization, secrets, cryptography, personal or payment data, untrusted input or public exposure. Not for a live incident or unrelated local refactors.
 ---
 

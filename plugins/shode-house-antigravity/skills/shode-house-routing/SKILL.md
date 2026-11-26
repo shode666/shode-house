@@ -1,5 +1,6 @@
 ---
 name: shode-house-routing
+user-invocable: false
 description: Decide who owns a request, covering type of work, responsible role, conflict resolution, parallel versus sequential execution, and whether a domain specialist is needed because the work requires a domain rule decision rather than merely using domain vocabulary. Phase order and approvals are not decided here.
 ---
 

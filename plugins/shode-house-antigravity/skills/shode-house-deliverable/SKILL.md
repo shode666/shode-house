@@ -1,5 +1,6 @@
 ---
 name: shode-house-deliverable
+user-invocable: false
 description: Output and completion contract for anyone producing a deliverable - durable artifact, re-checkable evidence for every claim, no placeholders, no completion claim without real tool output. Not how work is routed or reviewed.
 ---
 

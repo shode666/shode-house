@@ -1,5 +1,6 @@
 ---
 name: domain-core
+user-invocable: false
 description: Shared contract for domain expert personas, requiring an AI persona disclaimer and primary-source citations for any claim about a regulation, standard or protocol, and explicit marking when a source cannot be verified. It governs domain claims, not general project evidence or which expert is needed.
 ---
 

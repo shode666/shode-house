@@ -1,5 +1,6 @@
 ---
 name: ui-test
+user-invocable: false
 description: Automated browser-level end-to-end, visual regression and accessibility testing of a changed, rendered user interface, plus the UI quality rules every frontend change follows. Not for backend-only changes, unrendered designs, or site performance audits.
 ---
 
