@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [Unreleased]
 
+## [4.2.1] — 2026-11-26
+
+### Changed
+
+- The GitHub marketplace ships only `cook` as user-invocable in skill metadata. The other 19 skills remain available for internal loading on hosts that honor the visibility flag.
+
 ## [4.2.0] — 2026-11-22
 
 ### BREAKING

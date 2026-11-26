@@ -1,4 +1,4 @@
-# Shode House 4.2.0 host notes
+# Shode House 4.2.1 host notes
 
 All 6 role sources and 20 skills are preserved under knowledge/. The agent files and skill roots at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed to their knowledge/ copies, plus a generated resolution footer; Use cook as the entry.
 

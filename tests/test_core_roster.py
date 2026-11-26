@@ -33,7 +33,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "4.2.0"
+RELEASE_VERSION = "4.2.1"
 REPOSITORY_URL = "https://github.com/shode666/shode-house"
 APPROVED = ("build", "design", "operate", "plan", "secure", "verify")
 FABLE_PINNED = {"secure", "design"}
@@ -181,7 +181,7 @@ class RosterTest(unittest.TestCase):
         self.assertIn(f"release ล่าสุด **v{RELEASE_VERSION}**", readme_release)
         self.assertNotRegex(readme_release, rf"(?i)\b{re.escape(RELEASE_VERSION)}\s+candidate\b")
         self.assertNotRegex(readme_release, rf"(?i){re.escape(RELEASE_VERSION)}[^\n]*รอ[^\n]*publish")
-        self.assertRegex(changelog_release, rf"(?m)^## \[{re.escape(RELEASE_VERSION)}\] — 2026-11-22$")
+        self.assertRegex(changelog_release, rf"(?m)^## \[{re.escape(RELEASE_VERSION)}\] — 2026-11-26$")
         self.assertNotRegex(changelog_release, r"(?i)\b(candidate|not tagged|not published)\b")
         self.assertIn(f"the version must read {RELEASE_VERSION}", readme)
         self.assertTrue(host_notes.startswith(f"# Shode House {RELEASE_VERSION} host notes\n"))

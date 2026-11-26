@@ -1,7 +1,7 @@
 {
   "name": "shode-house",
-  "version": "4.2.0",
-  "description": "Shode House 4.2.0: 6 agent types, contextual UX critique and Playwright user-flow evidence. Codex 0.155.1 did not load hooks on the marketplace tree route.",
+  "version": "4.2.1",
+  "description": "Shode House 4.2.1: 6 agent types, contextual UX critique and Playwright user-flow evidence. Codex 0.155.1 did not load hooks on the marketplace tree route.",
   "author": {
     "name": "shode666",
     "url": "https://github.com/shode666"

@@ -1,7 +1,7 @@
 ---
 name: shode-house-discipline
 user-invocable: false
-description: Baseline conduct for team members: evidence, scope, language and handoff. Not phase order, ownership or the safety floor (see ask).
+description: Team conduct for evidence, scope, language and handoff. Not phase order, ownership or the safety floor.
 ---
 
 # shode-house — Discipline Core

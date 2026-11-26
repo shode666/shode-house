@@ -31,13 +31,13 @@ removed); 3.16.1+ superseded 3.16.0, which shipped a single-skill package withou
 > router (main session) + 6 agent type (+ domain reference 7 ชุด) ใน 7 ทีม ที่มี ownership ชัด, quality gate ที่ต้องมีหลักฐาน, token-aware context routing,
 > CI invariant ที่พิสูจน์ด้วย mutation test และ behavioral A/B eval
 
-[![Version](https://img.shields.io/badge/version-4.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.2.1-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/shode666/shode-house/actions/workflows/ci.yml/badge.svg)](https://github.com/shode666/shode-house/actions/workflows/ci.yml)
 
 ครอบคลุม **ERP, Booking, Trading, Fintech, Insurance, E-commerce, SAP, UX/UI** + polyglot 14 languages · ภาษาไทยเป็นหลัก
 
-**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.2.0** · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
+**What's new**: [CHANGELOG.md](CHANGELOG.md) · release ล่าสุด **v4.2.1** · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
 
 ---
 
@@ -231,7 +231,7 @@ check it with `python3 scripts/pack-team.py --host antigravity --check plugins/s
 /plugin marketplace update shode-house
 /plugin update shode-house@shode-house      # `install` alone keeps the already-installed version
 ```
-Check with `/plugin list` — the version must read 4.2.0.
+Check with `/plugin list` — the version must read 4.2.1.
 
 Prerequisites: **`jq` is required for hook enforcement** (`brew install jq` / `apt install jq`); on macOS the scope guard also uses the base-system `/usr/bin/perl` with `Unicode::Normalize`. Every Claude Code session starts with one status line from the SessionStart hook: **`ENFORCED`** only when jq runs a test program of the guards' kind and every guard prerequisite is present; **`ADVISORY-ONLY`** otherwise, naming the missing or broken dependency, and then the Write/Edit scope and state guards are **not** enforced (fix it and start a new session). The status line is a report, not a control, and ENFORCED is still defence in depth, not a guarantee (§ Security notes — hooks). Optional: `brew install node` (Context7 MCP ใช้ npx) · `brew install beads` (task tracker `bd`)
 
