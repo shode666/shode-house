@@ -323,6 +323,48 @@ class WorkflowShapeTest(unittest.TestCase):
                 self.assertTrue(any(want in p for p in ci_problems(text, makefile)), (label, ci_problems(text, makefile)))
 
 
+@unittest.skipUnless(gate_has("bash", "jq"), "needs bash + jq on the gate PATH")
+class GateSectionTwoAndTimingTest(unittest.TestCase):
+    """B10: CI #2 also fails when an excluded bucket (in-progress, deprecated) is listed in plugin.json `skills`.
+    B6: every section reports its own time, the end lists the slowest."""
+
+    def run2(self, skills):
+        manifest = json.dumps({"name": "shode-house", "version": "3.17.2", "skills": skills})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            tree(root, {".claude-plugin/plugin.json": manifest, "skills/discipline/a/SKILL.md": "x\n"})
+            return run_section(2, root)
+
+    def test_a_shipped_bucket_list_passes(self):
+        out = self.run2(["./skills/discipline/", "./skills/workflow/"])
+        self.assertIn("fail=0", out, out)
+
+    def test_an_excluded_bucket_in_plugin_json_is_red(self):
+        for bucket in ("in-progress", "deprecated"):
+            with self.subTest(bucket=bucket):
+                out = self.run2(["./skills/discipline/", f"./skills/{bucket}/"])
+                self.assertIn(f"excluded bucket '{bucket}' is listed in plugin.json skills", out)
+                self.assertIn("fail=1", out)
+
+    def test_each_section_prints_its_time_and_the_end_lists_the_slowest(self):
+        lines = gate_script()
+        first = next(i for i, l in enumerate(lines) if l.startswith('sec "1. '))
+        script = "\n".join(lines[:first]) + (
+            '\nsec "a. quick"\nsec "b. slow"\nsleep 1\nsec "c. quick"\ntick; SECN=""\n'
+            'printf "%s" "$TIMES" | sort -t"|" -k1,1nr | head -5\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            tree(root, {".claude-plugin/plugin.json": MANIFEST})
+            r = subprocess.run(["bash", "-c", script], cwd=root, capture_output=True, text=True,
+                               env={"PATH": GATE_PATH, "HOME": str(root)})
+        out = r.stdout + r.stderr
+        self.assertRegex(out, r"== b\. slow ==\n  \([1-9]\d*s\)\n", out)
+        self.assertIn("== a. quick ==\n  (0s)\n", out)
+        self.assertRegex(out, r"(?m)^[1-9]\d*\|b\. slow$")
+        self.assertIn("== a. quick ==", out)   # the header list itself is unchanged by the timing lines
+        self.assertNotRegex(out, r"(?m)^== .*\(\d+s\)")
+
+
 class WorkflowPermissionsAndPinsTest(unittest.TestCase):
     def test_top_level_permissions_are_read_only(self):
         text = CI.read_text()

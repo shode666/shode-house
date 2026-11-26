@@ -4,13 +4,17 @@
 # the workflow and no extraction. Maintainer-only: not in .pack-allowlist, never shipped.
 # Needs bash, jq and python3 (gate #27 also pytest + git >= 2.26, see docs/repo-invariants/plugin-release.md).
 # Run from the repository root; a gate failure exits non-zero.
-# Moved verbatim from the inline step of ci.yml; the body below starts at its first line.
+# Moved verbatim from the inline step of ci.yml (commit be9052e); since then: per-section timing and the
+# excluded-bucket check in #2, nothing else.
 [ -f .claude-plugin/plugin.json ] || { echo "FATAL: run scripts/ci-gate.sh from the repository root"; exit 2; }
 set +e -u -o pipefail
 fail=0
 err(){ printf '  X %s\n' "$*"; fail=1; }
 ok(){  printf '  ok %s\n' "$*"; }
-sec(){ printf '\n== %s ==\n' "$*"; }
+# B6: each section prints how long it took (whole seconds) after its last line, and the end prints the slowest five.
+SECN=""; SECT=$SECONDS; TIMES=""
+tick(){ if [ -n "$SECN" ]; then local d=$((SECONDS-SECT)); printf '  (%ss)\n' "$d"; TIMES="$TIMES$d|$SECN"$'\n'; fi; SECT=$SECONDS; }
+sec(){ tick; printf '\n== %s ==\n' "$*"; SECN="$*"; }
 PJ=.claude-plugin/plugin.json
 MK=.claude-plugin/marketplace.json
 command -v jq >/dev/null || { echo "FATAL: jq required"; exit 2; }
@@ -40,6 +44,7 @@ done < <(find skills -mindepth 3 -name SKILL.md)
 [ $fail -eq 0 ] && ok "all skills within limit"
 
 sec "2. excluded buckets not in plugin.json"
+for b in $EXCL; do case " $SHIP " in *" $b "*) err "excluded bucket '$b' is listed in plugin.json skills" ;; esac; done
 for b in $EXCL; do [ -d "skills/$b" ] || continue
   while IFS= read -r f; do n=$(basename "$(dirname "$f")")
     grep -q "\"$n\"" "$PJ" && err "'$n' excluded but in plugin.json"
@@ -693,6 +698,9 @@ fi
 rm -rf "${a15v:-}"; trap - EXIT
 [ $fail -eq 0 ] && ok "v4 gate tests (REQ4=$REQ4, plugin.json major $VMAJ; A1/A8/A16 tree + A2 required only when REQ4=1)"
 
+tick; SECN=""
+echo; echo "-- slowest sections --"
+printf '%s' "$TIMES" | sort -t'|' -k1,1nr | head -5 | awk -F'|' '{printf "  %4ss  %s\n", $1, $2}'
 echo
 if [ $fail -eq 0 ]; then echo "== ALL GATE CHECKS PASS =="; else echo "== GATE FAILED =="; fi
 exit $fail
