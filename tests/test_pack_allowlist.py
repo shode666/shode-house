@@ -126,6 +126,7 @@ Run: python3 tests/test_pack_allowlist.py                       (CI gate #26; al
      python3 tests/test_pack_allowlist.py --archive X.plugin    checks a built archive: same file set
                                                                 as the allowlist + no hit + every
                                                                 unpacked executable parses
+                                                                + every entry's mode = the git index
                                                                 (CI runs it in "Build .plugin artifact")
 """
 import fnmatch, importlib.util, os, pathlib, posixpath, py_compile, re, shutil, subprocess, sys, tempfile, unittest, zipfile
@@ -508,6 +509,43 @@ def unchecked_fails(notes, env=None):
     return bool(notes) and bool((os.environ if env is None else env).get("CI"))
 
 
+def git_modes(root=ROOT):
+    """{path: '100644' | '100755' | ...} from the git INDEX of `root`; None when it cannot be read."""
+    try:
+        raw = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z"], check=True, capture_output=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    out = {}
+    for rec in raw.split(b"\0"):
+        if rec:
+            meta, path = rec.split(b"\t", 1)
+            out[path.decode("utf-8", "surrogateescape")] = meta.split()[0].decode()
+    return out
+
+
+def mode_problems(archive, index):
+    """Every archive entry's on-disk mode must equal the mode git records (100644 -> 0644, 100755 -> 0755) and
+    every directory entry must be 0755. `zip -y` records the working tree's modes, so a test suite that leaves
+    a file at 0600 or 0711 (bd:shode-house-zqc) would otherwise ship that mode. `index` None = git unreadable."""
+    if index is None:
+        return ["archive modes cannot be checked: the git index of the repository could not be read"]
+    out = []
+    with zipfile.ZipFile(archive) as z:
+        for i in z.infolist():
+            mode = (i.external_attr >> 16) & 0o7777
+            name = i.filename
+            if i.is_dir():
+                if mode != 0o755:
+                    out.append(f"archive mode: directory {name} is {mode:04o}, want 0755")
+                continue
+            want = {"100644": 0o644, "100755": 0o755}.get(index.get(name))
+            if want is None:
+                out.append(f"archive mode: {name} has no regular-file entry in the git index ({index.get(name)!r})")
+            elif mode != want:
+                out.append(f"archive mode: {name} is {mode:04o} in the archive but git records {index[name]} (want {want:04o})")
+    return out
+
+
 def scan_archive(archive, root=ROOT):
     with zipfile.ZipFile(archive) as z:
         members = {i.filename: z.read(i.filename) for i in z.infolist() if not i.is_dir()}
@@ -517,6 +555,7 @@ def scan_archive(archive, root=ROOT):
     expected = shipped_files(root)
     drift = [f"not on the allowlist but in the archive: {p}" for p in sorted(set(members) - expected)]
     drift += [f"on the allowlist but not in the archive: {p}" for p in sorted(expected - set(members))]
+    drift += mode_problems(archive, git_modes(root))
     return drift, scan(members, members.__getitem__, repo=root), len(members), (problems, parsed, notes)
 
 
@@ -1033,6 +1072,60 @@ class PackRefusesSymlinksTest(unittest.TestCase):
                         link.write_bytes(saved)
             rc, out, built = self._pack(repo)                       # the links removed: it packs again
             self.assertEqual((rc, len(built)), (0, 1), out)
+
+
+class ArchiveModeTest(unittest.TestCase):
+    """bd:shode-house-zqc: `--archive` compares every entry's mode with the git index. The CI archive of 991e632
+    carried references/registry/routes.json at 0600 and scripts/policy-check.sh at 0711 (leaked by a test suite);
+    both must now be named and fail."""
+    INDEX = {"references/registry/routes.json": "100644", "scripts/policy-check.sh": "100755", "README.txt": "100644"}
+
+    def archive(self, entries):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        path = os.path.join(d, "x.plugin")
+        with zipfile.ZipFile(path, "w") as z:
+            for name, mode in entries:
+                info = zipfile.ZipInfo(name)
+                info.create_system = 3
+                info.external_attr = ((0o040000 if name.endswith("/") else 0o100000) | mode) << 16
+                z.writestr(info, b"" if name.endswith("/") else b"x\n")
+        return path
+
+    GOOD = [("references/", 0o755), ("references/registry/", 0o755), ("references/registry/routes.json", 0o644),
+            ("scripts/", 0o755), ("scripts/policy-check.sh", 0o755), ("README.txt", 0o644)]
+
+    def test_modes_equal_to_the_index_pass(self):
+        self.assertEqual([], mode_problems(self.archive(self.GOOD), self.INDEX))
+
+    def test_leaked_0600_and_0711_are_both_named(self):
+        bad = [(n, {"references/registry/routes.json": 0o600, "scripts/policy-check.sh": 0o711}.get(n, m)) for n, m in self.GOOD]
+        out = "\n".join(mode_problems(self.archive(bad), self.INDEX))
+        self.assertIn("references/registry/routes.json is 0600", out)
+        self.assertIn("scripts/policy-check.sh is 0711", out)
+
+    def test_exec_bit_disagreeing_with_the_index_fails_both_ways(self):
+        bad = [(n, 0o755 if n == "README.txt" else 0o644 if n == "scripts/policy-check.sh" else m) for n, m in self.GOOD]
+        out = "\n".join(mode_problems(self.archive(bad), self.INDEX))
+        self.assertIn("README.txt is 0755", out)
+        self.assertIn("scripts/policy-check.sh is 0644", out)
+
+    def test_directory_entry_must_be_0755(self):
+        bad = [(n, 0o700 if n == "scripts/" else m) for n, m in self.GOOD]
+        self.assertIn("directory scripts/ is 0700", "\n".join(mode_problems(self.archive(bad), self.INDEX)))
+
+    def test_entry_missing_from_the_index_and_unreadable_index_fail(self):
+        self.assertIn("no regular-file entry", "\n".join(mode_problems(self.archive(self.GOOD + [("extra.txt", 0o644)]), self.INDEX)))
+        self.assertTrue(mode_problems(self.archive(self.GOOD), None))
+
+    def test_cli_fails_on_a_leaked_mode_archive_and_names_the_file(self):
+        # through the real `--archive` entry point and the real git index of this repository
+        leaky = self.archive([("references/registry/routes.json", 0o600), ("scripts/policy-check.sh", 0o711)])
+        run = subprocess.run([sys.executable, "-I", str(pathlib.Path(__file__).resolve()), "--archive", leaky],
+                             cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(1, run.returncode, run.stdout)
+        self.assertIn("references/registry/routes.json is 0600 in the archive but git records 100644", run.stdout)
+        self.assertIn("scripts/policy-check.sh is 0711 in the archive but git records 100755", run.stdout)
 
 
 if __name__ == "__main__":

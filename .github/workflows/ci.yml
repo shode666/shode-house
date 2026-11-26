@@ -19,7 +19,9 @@ permissions:
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: the Linux suites depend on the runner's coreutils; 26.04 ships uutils mkdir, which reports success when the directory already exists (shode-house-zqc).
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -828,6 +830,17 @@ jobs:
         # no new dependency.
         run: bash tests/test-lock.sh
 
+  # The release archive is built on a FRESH runner (needs: gate), so no test suite has ever run in this tree: a suite
+  # that leaves a tracked file in another mode (0600 routes.json / 0711 policy-check.sh once did) can no longer reach
+  # the pack. `--archive` below also compares every entry's mode with the git index, so a leak is caught even if
+  # this job is ever changed to build in the suites' checkout.
+  pack:
+    needs: gate
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
       # The archive that gets uploaded is checked as built, and one shipped script is run from it
       # unpacked: a file a script opens at run time has to be IN the archive, not just in the repo.
       # `make pack` may add exactly one path to the working tree: the archive (git-ignored, so the
@@ -836,6 +849,8 @@ jobs:
         run: |
           # an archive left by an earlier suite is removed first; the snapshot is a file, so a tree with no untracked path compares as empty
           rm -f shode-house-v*.plugin
+          # zip -y records the on-disk modes; pin the umask so a checked-out 0644/0755 file stays that
+          umask 022
           # U22 iter 2 (Chris L2/L3): an unpredictable snapshot name, and an EXIT trap for it and the unpack dir
           before=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pack-tree-before.XXXXXX") || exit 1
           d=""; trap 'rm -rf "$before" ${d:+"$d"}' EXIT
