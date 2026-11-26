@@ -52,6 +52,56 @@ path_without_bd() {
 HAVE_BD=0
 command -v bd >/dev/null 2>&1 && HAVE_BD=1
 
+# bd:shode-house-zqc -- the MUTATION cases edit the REAL references/registry/routes.json and
+# scripts/policy-check.sh in place and must hand both back byte- AND mode-identical (CI's
+# `make pack` runs after this suite and `zip -y` records the on-disk modes; a mktemp file is
+# 0600, so a `mktemp` + `mv` swap or a restore from a mktemp backup leaked 0600 into the
+# shipped archive). Rules: write IN PLACE (`cat >` keeps the inode and the mode); record the
+# original mode + content checksum before any mutation; observe the mode the mutation left
+# (record_left_mode) BEFORE the restore chmod; EXIT/INT/TERM traps restore both files.
+# mode_of probes GNU `stat -c` first, then BSD `stat -f` (on GNU `-f` means --file-system and
+# succeeds with garbage, so BSD-first would be wrong on Linux).
+mode_of() {
+  local m
+  m=$(stat -c '%a' "$1" 2>/dev/null) || m=$(stat -f '%Lp' "$1" 2>/dev/null) || m=""
+  printf '%s' "$m"
+}
+valid_mode() { case "$1" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) return 0 ;; *) return 1 ;; esac; }
+sum_of() { cksum < "$1"; }
+ROUTES_MODE=$(mode_of "$ROUTES"); POLICY_MODE=$(mode_of "$POLICY")
+ROUTES_SUM=$(sum_of "$ROUTES");   POLICY_SUM=$(sum_of "$POLICY")
+valid_mode "$ROUTES_MODE" && valid_mode "$POLICY_MODE" || {
+  printf 'test harness error: cannot read a valid octal mode (routes.json: %s, policy-check.sh: %s)\n' "$ROUTES_MODE" "$POLICY_MODE" >&2
+  exit 1
+}
+ROUTES_BACKUP=""; POLICY_BACKUP=""; LEFT_MODES=""
+restore_routes_content() {
+  if [ -n "${ROUTES_BACKUP:-}" ] && [ -f "$ROUTES_BACKUP" ]; then
+    cat "$ROUTES_BACKUP" > "$ROUTES"
+    rm -f "$ROUTES_BACKUP"
+    ROUTES_BACKUP=""
+  fi
+}
+restore_policy_content() {
+  if [ -n "${POLICY_BACKUP:-}" ] && [ -f "$POLICY_BACKUP" ]; then
+    cat "$POLICY_BACKUP" > "$POLICY"
+    rm -f "$POLICY_BACKUP"
+    POLICY_BACKUP=""
+  fi
+  rm -f "$POLICY.bak"
+}
+# record_left_mode <label> <file> -- observe the mode a mutation left, BEFORE any re-chmod
+record_left_mode() { LEFT_MODES="$LEFT_MODES $1=$(mode_of "$2")"; }
+restore_registry_files() {
+  restore_routes_content
+  restore_policy_content
+  chmod "$ROUTES_MODE" "$ROUTES" || printf 'test harness error: restore chmod %s %s failed\n' "$ROUTES_MODE" "$ROUTES" >&2
+  chmod "$POLICY_MODE" "$POLICY" || printf 'test harness error: restore chmod %s %s failed\n' "$POLICY_MODE" "$POLICY" >&2
+}
+trap restore_registry_files EXIT
+trap 'restore_registry_files; exit 130' INT
+trap 'restore_registry_files; exit 143' TERM
+
 # ---------------------------------------------------------------------------
 t_start "registries: capabilities.json + routes.json are valid JSON with non-empty tables"
 jq empty "$CAPS" >/dev/null 2>&1; assert_true "$?" "capabilities.json must parse as JSON"
@@ -803,10 +853,10 @@ before_out=$("$ROUTE" "$D/req.json" 2>&1)
 before_req=$(printf '%s' "$before_out" | jq -c '.required')
 assert_contains "$before_req" "design" "sanity: baseline still requires design"
 
-BACKUP=$(mktemp -t routes-backup.XXXXXX)
-cp "$ROUTES" "$BACKUP"
+ROUTES_BACKUP=$(mktemp -t routes-backup.XXXXXX)
+cp "$ROUTES" "$ROUTES_BACKUP"
 tmp=$(mktemp)
-jq 'del(.routes[] | select(.id == "frontend"))' "$ROUTES" > "$tmp" && mv "$tmp" "$ROUTES"
+jq 'del(.routes[] | select(.id == "frontend"))' "$ROUTES" > "$tmp" && cat "$tmp" > "$ROUTES"; rm -f "$tmp"
 
 mutated_out=$("$ROUTE" "$D/req.json" 2>&1)
 mutated_req=$(printf '%s' "$mutated_out" | jq -c '.required')
@@ -815,7 +865,8 @@ case "$mutated_req" in
   *) t_ok ;;
 esac
 
-mv "$BACKUP" "$ROUTES"
+restore_routes_content
+record_left_mode mutation-a "$ROUTES"
 restored_out=$("$ROUTE" "$D/req.json" 2>&1)
 restored_req=$(printf '%s' "$restored_out" | jq -c '.required')
 assert_contains "$restored_req" "design" "restore: routes.json back to original, design required again"
@@ -839,10 +890,10 @@ done < <(jq -r '.routes[].phases[]' "$ROUTES" | sort -u)
 # states[] -> the drift test above must go red (proves it actually checks membership,
 # not just "is non-empty").
 t_start "MUTATION (c): a bogus phase id injected into routes.json makes the phase-vocab drift test fail"
-BACKUP=$(mktemp -t routes-backup2.XXXXXX)
-cp "$ROUTES" "$BACKUP"
+ROUTES_BACKUP=$(mktemp -t routes-backup2.XXXXXX)
+cp "$ROUTES" "$ROUTES_BACKUP"
 tmp=$(mktemp)
-jq '(.routes[] | select(.id == "frontend") | .phases) |= (. + ["phase_bogus_drift"])' "$ROUTES" > "$tmp" && mv "$tmp" "$ROUTES"
+jq '(.routes[] | select(.id == "frontend") | .phases) |= (. + ["phase_bogus_drift"])' "$ROUTES" > "$tmp" && cat "$tmp" > "$ROUTES"; rm -f "$tmp"
 
 mutated_unknown=""
 while IFS= read -r p; do
@@ -855,7 +906,8 @@ case "$mutated_unknown" in
   *) t_fail "injecting an unknown phase id should have made the drift check fail but it reported unknown='$mutated_unknown' -- the check did not react to the injected drift (test would stay green, gate not proven to enforce)" ;;
 esac
 
-mv "$BACKUP" "$ROUTES"
+restore_routes_content
+record_left_mode mutation-c "$ROUTES"
 restored_unknown=""
 while IFS= read -r p; do
   [ -z "$p" ] && continue
@@ -937,8 +989,8 @@ EOF
 baseline_out=$(POLICYCHECK_ROOT="$D" "$POLICY" placeholder-bd2 2>&1)
 assert_contains "$baseline_out" "FAIL anti-puppet" "sanity: baseline still really checks anti-puppet and FAILs"
 
-BACKUP=$(mktemp -t policy-backup.XXXXXX)
-cp "$POLICY" "$BACKUP"
+POLICY_BACKUP=$(mktemp -t policy-backup.XXXXXX)
+cp "$POLICY" "$POLICY_BACKUP"
 # mutate: force the anti-puppet branch to always SKIP instead of running the real
 # placeholder check (simulates "someone quietly turned a real check into a SKIP")
 sed -i.bak \
@@ -952,12 +1004,28 @@ case "$mutated_out" in
   *) t_fail "mutation produced unexpected output: $mutated_out" ;;
 esac
 
-mv "$BACKUP" "$POLICY"
-chmod +x "$POLICY"
-rm -f "$POLICY.bak"
+restore_policy_content
+record_left_mode mutation-b "$POLICY"
 restored_out=$(POLICYCHECK_ROOT="$D" "$POLICY" placeholder-bd2 2>&1)
 assert_contains "$restored_out" "FAIL anti-puppet" "restore: policy-check.sh back to original, real anti-puppet check FAILs again"
 rm -rf "$D"
+
+# ---------------------------------------------------------------------------
+t_start "bd:shode-house-zqc: the MUTATION cases left routes.json and policy-check.sh in their original mode and content"
+# observe what the three MUTATION cases left (recorded after the content restore, before any chmod)
+bad_modes=""
+for kv in $LEFT_MODES; do
+  m=${kv#*=}
+  case "${kv%%=*}" in mutation-b) want=$POLICY_MODE ;; *) want=$ROUTES_MODE ;; esac
+  valid_mode "$m" && [ "$m" = "$want" ] || bad_modes="$bad_modes $kv(want $want)"
+done
+[ -n "$LEFT_MODES" ] || bad_modes="$bad_modes (no mode was recorded)"
+[ -z "$bad_modes" ] && t_ok || t_fail "a mutation case left a file in a different mode:$bad_modes"
+restore_registry_files
+final_r=$(mode_of "$ROUTES"); final_p=$(mode_of "$POLICY")
+[ "$final_r" = "$ROUTES_MODE" ] && [ "$final_p" = "$POLICY_MODE" ] && t_ok || t_fail "mode after restore: routes.json '$final_r' (was $ROUTES_MODE), policy-check.sh '$final_p' (was $POLICY_MODE)"
+[ "$(sum_of "$ROUTES")" = "$ROUTES_SUM" ] && [ "$(sum_of "$POLICY")" = "$POLICY_SUM" ] && t_ok || t_fail "content after restore differs from the original (routes.json or policy-check.sh)"
+[ ! -e "$POLICY.bak" ] && t_ok || t_fail "$POLICY.bak was left behind"
 
 # ---------------------------------------------------------------------------
 # C-A6 iter0: policy-check.sh gained two more real (non-SKIP-always) checks now that

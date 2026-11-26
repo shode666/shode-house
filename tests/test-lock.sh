@@ -550,7 +550,18 @@ assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED
 # same bounded waits as the real-mkdir case above.
 # =============================================================================
 t_start "RACE recover||recover with a lying mkdir: N=5 concurrent recovers on the SAME stuck lock -- exactly 1 RECOVERED, 4 RECOVERY_IN_PROGRESS, 8 trials"
-SHIM_BIN=$(sandbox)/bin; command mkdir -p "$SHIM_BIN"
+# bd:shode-house-px2 -- the shim dir is created by mktemp and checked BEFORE use: if mktemp fails the
+# case fails loudly (it used to expand to "/bin" and write a shim mkdir over the real one, then
+# `rm -rf "$(dirname "$SHIM_BIN")"` would have been `rm -rf /`). Cleanup removes SHIM_DIR by its own
+# variable, never a dirname of a derived path.
+SHIM_DIR=$(mktemp -d -t lock-shim.XXXXXX 2>/dev/null) || SHIM_DIR=""
+SHIM_OK=1
+if [ -z "$SHIM_DIR" ] || [ "$SHIM_DIR" = "/" ] || [ ! -d "$SHIM_DIR" ]; then
+  SHIM_OK=0
+  t_fail "could not create the lying-mkdir sandbox dir with mktemp (got '$SHIM_DIR') -- refusing to run the case, nothing was written"
+fi
+if [ "$SHIM_OK" = 1 ]; then
+SHIM_BIN="$SHIM_DIR/bin"; command mkdir -p "$SHIM_BIN"
 REAL_MKDIR=$(command -v mkdir)
 cat > "$SHIM_BIN/mkdir" <<SHIM
 #!/bin/sh
@@ -590,7 +601,8 @@ for _trial in $(seq 1 8); do
   rm -rf "$D"
 done
 assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS even when mkdir lies -- got $bad_trials bad trial(s)"
-rm -rf "$(dirname "$SHIM_BIN")"
+rm -rf "$SHIM_DIR"
+fi
 
 # =============================================================================
 # bd:shode-house-8ss close-out -- the RACE recover||recover flake above, made
