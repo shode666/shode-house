@@ -3,18 +3,19 @@
 > **Software house ทั้งทีมบน Claude Code**: router หนึ่งตัวคุม main session, agent 6 type ที่แบ่ง ownership ชัด,
 > gate ที่ต้องมีหลักฐานทุกขั้น และ CI ที่ตรวจ invariant ของ plugin ด้วย mutation test
 
-[![Version](https://img.shields.io/badge/version-4.2.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.2.2-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/shode666/shode-house/actions/workflows/ci.yml/badge.svg)](https://github.com/shode666/shode-house/actions/workflows/ci.yml)
 
-release ล่าสุด **v4.2.1** · ประวัติทุกเวอร์ชัน: [CHANGELOG.md](CHANGELOG.md) · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
+release ล่าสุด **v4.2.2** · ประวัติทุกเวอร์ชัน: [CHANGELOG.md](CHANGELOG.md) · host notes: [docs/team-candidate-hosts.md](docs/team-candidate-hosts.md)
 
 ครอบคลุมงาน ERP, Booking, Trading, Fintech, Insurance, E-commerce, SAP และ UX/UI · `build` รองรับ 14 ภาษา · ทีมตอบภาษาเดียวกับผู้ใช้
 
 ---
 
-## 4.2.1 มีอะไรใหม่
+## 4.2.2 มีอะไรใหม่
 
+- 4.2.2 มีเนื้อหาเหมือน 4.2.1 ที่ publish ใหม่ทุกอย่าง แค่ขึ้นเลขเวอร์ชันใหม่ ให้คนที่ติดตั้ง 4.2.1 ตัวแรก (`a1b359b`) ไปแล้วได้รับ update อัตโนมัติ
 - **`cook` เป็น skill ตัวเดียวที่ host เห็น** ใน marketplace tree (`plugins/shode-house`) ส่วน skill อีก 19 ตัวอยู่ใต้
   `knowledge/skills/` แล้ว router และ agent จะ Read เมื่อมีขั้นตอนไหนต้องใช้ agent อ่านไฟล์ skill ที่เคย preload เองก่อนเริ่มงาน
   และ Codex ก็เห็นแค่ `cook` เหมือนกัน
@@ -70,7 +71,7 @@ user ──▶ /shode-house:cook <คำขอ>
 /plugin update shode-house@shode-house      # ใช้ install อย่างเดียวจะได้เวอร์ชันเดิม
 ```
 
-ตรวจด้วย `/plugin list`: the version must read 4.2.1.
+ตรวจด้วย `/plugin list`: the version must read 4.2.2.
 
 **สิ่งที่ต้องมี:** ต้องมี `jq` ไม่อย่างนั้น hook จะไม่บังคับใช้ (`brew install jq` / `apt install jq`) และบน macOS
 scope guard ใช้ `/usr/bin/perl` ที่มี `Unicode::Normalize` ทุก session จะขึ้นบรรทัดสถานะ `shode-house hooks:` ว่าเป็น

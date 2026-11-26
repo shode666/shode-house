@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ## [Unreleased]
 
+## [4.2.2] — 2026-11-26
+
+### Changed
+
+- Version bump only, so that installs of the first 4.2.1 build (a1b359b, whose release and tag were replaced) update: the content is the republished 4.2.1 (`cook` is the only registered skill in the marketplace trees) plus the 4.2.1 README rewrite, with `docs/security-notes.md` holding the hooks and design-runner security notes verbatim.
+
 ## [4.2.1] — 2026-11-26
 
 ### Changed

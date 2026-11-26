@@ -33,7 +33,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "4.2.1"
+RELEASE_VERSION = "4.2.2"
 REPOSITORY_URL = "https://github.com/shode666/shode-house"
 APPROVED = ("build", "design", "operate", "plan", "secure", "verify")
 FABLE_PINNED = {"secure", "design"}

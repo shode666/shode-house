@@ -1,4 +1,4 @@
-# Shode House 4.2.1 host notes
+# Shode House 4.2.2 host notes
 
 All 6 role sources and 20 skills are preserved under knowledge/. Only `cook` is registered as a skill; the other 19 are read from knowledge/ when a step loads them. The agent files and the cook skill at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed to their knowledge/ copies, plus a generated resolution footer (agents read their former preloads); Use cook as the entry.
 
