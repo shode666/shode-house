@@ -923,8 +923,10 @@ _lock_recover_nothing_to_recover() {
 
 # ---- internal (bd:shode-house-8ss close-out): re-observe a `.recovering` marker that
 # was classified UNKNOWN -- "the marker directory is there, readable, but has no pid
-# file yet". `mkdir` is the ONLY safe exclusive claim available here (see lock_recover
-# Step 0), and a directory created by mkdir is necessarily EMPTY for a nonzero interval
+# file yet". The marker claim (see lock_recover Step 0) is a mkdir plus a noclobber pid
+# write; the pid create, not mkdir (which is NOT exclusive on uutils coreutils 0.10.0 /
+# Ubuntu 26.04, bd:shode-house-zqc), is what makes it exclusive. A directory created by
+# mkdir is necessarily EMPTY for a nonzero interval
 # before its writer can put a pid in it, so a loser that classifies the marker inside
 # that interval sees a pid-less marker for BOTH of these, which are opposites:
 #   * a live recovery that claimed the marker microseconds ago (ordinary contention --
@@ -1023,7 +1025,15 @@ lock_recover() {
   local recovering="${lockd}.recovering"
 
   # ---- Step 0: atomically claim the RIGHT to recover -- exactly one winner. ----
-  if ! mkdir "$recovering" 2>/dev/null; then
+  # Exclusivity comes from the noclobber (O_EXCL) create of "$recovering/pid", NOT from
+  # mkdir's exit status: on Ubuntu 26.04 (uutils coreutils 0.10.0) mkdir can return 0 to
+  # more than one concurrent caller (bd:shode-house-zqc; same finding as lock_acquire's
+  # token create). Several callers may "win" mkdir; only one can create the pid file, and a
+  # caller that loses that create does NOT own the marker -- it takes the loser path below
+  # and never writes into or removes the marker. The claim itself carries the pid, so the
+  # pid-first ordering (the marker is pid-less for as short a time as possible) is kept.
+  local my_pid="${BASHPID:-$$}"
+  if ! { mkdir "$recovering" 2>/dev/null && ( set -C; printf '%s' "$my_pid" > "$recovering/pid" ) 2>/dev/null; }; then
     local mcls; mcls=$(_lock_classify_holder "$recovering")
     # ---- bd:shode-house-8ss close-out: a marker that is merely PID-LESS (UNKNOWN) is
     # the one classification that cannot tell "another recovery claimed this marker
@@ -1115,13 +1125,11 @@ lock_recover() {
     esac
   fi
 
-  # ---- we exclusively own $recovering now. Write pid FIRST, before anything that
-  # forks a subprocess (the token below needs `date`) -- this minimizes the window
-  # where a concurrent losing recover (or lock_acquire's marker-timeout classifier)
-  # observes this marker as pid-less and has to settle-wait (see
-  # _lock_classify_holder) instead of seeing LIVE immediately. ----
-  local my_pid="${BASHPID:-$$}"
-  printf '%s' "$my_pid" > "$recovering/pid"
+  # ---- we exclusively own $recovering now: its pid was written by the Step 0 claim,
+  # before anything that forks a subprocess (the token below needs `date`), which
+  # minimizes the window where a concurrent losing recover (or lock_acquire's
+  # marker-timeout classifier) observes this marker as pid-less and has to settle-wait
+  # (see _lock_classify_holder) instead of seeing LIVE immediately. ----
   # LOCK_RECOVER_TOKEN_OVERRIDE: test-only hook (no-op unless set) so a test can force
   # a deterministic, predictable quarantine-name collision (Acceptance E) without
   # needing to guess an unguessable real token.

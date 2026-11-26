@@ -540,6 +540,59 @@ done
 assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS out of 5 concurrent recovers -- got $bad_trials bad trial(s)"
 
 # =============================================================================
+# bd:shode-house-zqc -- CONTRACT 1b applied to recover: on Ubuntu 26.04 (uutils coreutils
+# 0.10.0) `mkdir` can return 0 to MORE THAN ONE concurrent caller, so the Step 0 `mkdir
+# "$recovering"` is not an exclusive claim by itself; the noclobber (O_EXCL) pid write is.
+# The shim below is a real executable on PATH (a bash function would not reach the
+# `bash "$LOCKLIB" recover` subprocesses): it reports success whenever the real mkdir
+# failed because the target directory already exists (EEXIST), and otherwise behaves exactly
+# like the real mkdir. Same scenario, same assertions and
+# same bounded waits as the real-mkdir case above.
+# =============================================================================
+t_start "RACE recover||recover with a lying mkdir: N=5 concurrent recovers on the SAME stuck lock -- exactly 1 RECOVERED, 4 RECOVERY_IN_PROGRESS, 8 trials"
+SHIM_BIN=$(sandbox)/bin; command mkdir -p "$SHIM_BIN"
+REAL_MKDIR=$(command -v mkdir)
+cat > "$SHIM_BIN/mkdir" <<SHIM
+#!/bin/sh
+# lying mkdir: run the real one, and when it fails because the (last) target already
+# exists report success anyway -- what uutils does, atomically at the syscall, so no
+# caller's own check-then-create window can hide the lie
+for _a in "\$@"; do _last="\$_a"; done
+"$REAL_MKDIR" "\$@"; _rc=\$?
+if [ "\$_rc" -ne 0 ] && [ -d "\$_last" ]; then exit 0; fi
+exit "\$_rc"
+SHIM
+chmod +x "$SHIM_BIN/mkdir"
+bad_trials=0
+for _trial in $(seq 1 8); do
+  D=$(sandbox); lockd="$D/.lock-rr-lying"
+  seed_dead_lock "$lockd" "stale" >/dev/null
+  sync="$D/sync"
+  for i in 1 2 3 4 5; do
+    PATH="$SHIM_BIN:$PATH" LOCK_RECOVER_SYNC_PREMV="$sync" bash "$LOCKLIB" recover "$lockd" --reason "lying-recover-$i" >"$D/out.$i" 2>&1 &
+  done
+  n=0
+  while [ ! -e "${sync}.ready" ]; do n=$((n + 1)); [ "$n" -ge 100 ] && break; sleep 0.1; done
+  trial_timeout=0
+  if [ -e "${sync}.ready" ]; then
+    n=0
+    while [ "$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')" -lt 4 ]; do
+      n=$((n + 1)); [ "$n" -ge 100 ] && { trial_timeout=1; break; }; sleep 0.1
+    done
+  else
+    trial_timeout=1
+  fi
+  : > "${sync}.go"
+  wait
+  recovered=$(grep -l '^RECOVERED' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
+  in_progress=$(grep -l '^RECOVERY_IN_PROGRESS' "$D"/out.* 2>/dev/null | wc -l | tr -d ' ')
+  [ "$trial_timeout" = "0" ] && [ "$recovered" = "1" ] && [ "$in_progress" = "4" ] || bad_trials=$((bad_trials + 1))
+  rm -rf "$D"
+done
+assert_eq "$bad_trials" "0" "every one of 8 trials must show exactly 1 RECOVERED and 4 RECOVERY_IN_PROGRESS even when mkdir lies -- got $bad_trials bad trial(s)"
+rm -rf "$(dirname "$SHIM_BIN")"
+
+# =============================================================================
 # bd:shode-house-8ss close-out -- the RACE recover||recover flake above, made
 # deterministic. `mkdir` is the only exclusive claim available for the .recovering
 # marker, so the marker necessarily exists pid-less for a nonzero interval before its
