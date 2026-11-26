@@ -20,6 +20,7 @@ The #17, #21, #23 and #24 sections are cut out of scripts/ci-gate.sh together wi
 in a scratch tree, so the real shell text is tested, not a copy of it.
 Run: python3 tests/test_ci_wiring.py   (CI gate #27 runs it; stdlib + bash + jq)
 """
+import hashlib
 import json
 import pathlib
 import re
@@ -231,6 +232,81 @@ def ci_jobs(text):
     return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
 
 
+# The `make suites` recipe, pinned (round-3 finding F1): the 11 suites in the order the old ci.yml steps ran them.
+# Each is (title echoed, command). The eval-scorer block is long, so it is pinned by the sha256 of its logical line
+# (continuations joined, whitespace collapsed); every other command is compared as text.
+SCORER_SHA256 = "fe1c2bece73f09ffb1dd1a9fb1bc40536d716a965aadb49b8741ce597320f959"
+SUITES = [
+    ("per-run usage comparator", "python3 -m unittest discover -s tests -p 'test_usage_report.py'"),
+    ("optional drain template contract (mock host, not live qualification)", "node --test tests/test_drain_template.mjs"),
+    ("eval scorer smoke (committed recorded transcripts, no live agent run)", None),
+    ("GS1 E2E regression gate (vs eval/baseline/e2e-golden/GS1-BASELINE.md)", "python3 scripts/eval-regression-gate.py"),
+    ("workflow-state.sh", "bash tests/test-workflow-state.sh"),
+    ("registry + route/policy-check", "bash tests/test-registry.sh"),
+    ("scope-check", "bash tests/test-scope-check.sh"),
+    ("permission-check", "bash tests/test-permission-check.sh"),
+    ("reliability", "bash tests/test-reliability.sh"),
+    ("hooks fixtures", "bash tests/test-hooks.sh"),
+    ("lock primitive", "bash tests/test-lock.sh"),
+]
+# Any form that lets a failing suite pass: `|| true`, `|| :`, `; true`, `&& true`, a `-` recipe prefix, `set +e`.
+SWALLOW = re.compile(r"\|\|\s*(?:true|:|exit\s+0)(?![\w])|[;&]\s*(?:true|:)\s*$|^[@+]*-|set\s+\+e|\|\|\s*$")
+
+
+def suites_problems(makefile):
+    """Everything wrong with the `make suites` recipe: the exact ordered 11 commands, nothing that swallows a failure."""
+    problems = []
+    if re.search(r"(?m)^\.(?:IGNORE|ONESHELL)\b", makefile):
+        problems.append("the Makefile sets .IGNORE or .ONESHELL")
+    head = re.search(r"(?m)^suites:(.*)$", makefile)
+    if not head or head.group(1).strip():
+        problems.append("the suites target is missing or has prerequisites")
+    recipe = re.search(r"(?m)^suites:.*\n((?:\t.*\n)+)", makefile)
+    if not recipe:
+        return problems + ["no suites recipe"]
+    logical, cur = [], ""
+    for raw in recipe.group(1).splitlines():
+        line = raw[1:]
+        if line.endswith("\\"):
+            cur += line[:-1] + " "
+            continue
+        logical.append(re.sub(r"\s+", " ", cur + line).strip())
+        cur = ""
+    want = len(SUITES) * 2
+    if len(logical) != want:
+        problems.append(f"the suites recipe has {len(logical)} commands, want {want} (11 echo + 11 suite)")
+        return problems
+    for i, (title, command) in enumerate(SUITES):
+        echo, got = logical[2 * i], logical[2 * i + 1]
+        if echo != f'@echo "== suite: {title} =="':
+            problems.append(f"suite {i + 1} is not {title!r}, in this order")
+        if command is None:
+            if not got.startswith("@set -e; ") or hashlib.sha256(got.encode()).hexdigest() != SCORER_SHA256:
+                problems.append(f"suite {i + 1} (eval scorer smoke) block changed")
+        else:
+            if got != command:
+                problems.append(f"suite {i + 1} is not `{command}`")
+            if SWALLOW.search(got):
+                problems.append(f"suite {i + 1} swallows its exit code: {got}")
+    return problems
+
+
+def action_problems(text):
+    """Every third-party `uses:` is a full 40-hex commit SHA with a `# vX.Y.Z` comment; every checkout drops its credentials."""
+    problems = []
+    for line in text.splitlines():
+        m = re.match(r"^\s*(?:-\s+)?uses:\s*(\S+)(.*)$", line)
+        if m and not re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", m.group(1)):
+            problems.append(f"uses: {m.group(1)} is not pinned to a 40-hex commit SHA")
+        elif m and not re.fullmatch(r"\s+#\s+v\d+\.\d+\.\d+\s*", m.group(2)):
+            problems.append(f"uses: {m.group(1)} has no `# vX.Y.Z` comment")
+    steps = re.split(r"(?m)^(?=      - )", text)
+    for step in steps:
+        if re.match(r"      - uses: actions/checkout@", step) and not re.search(r"(?m)^          persist-credentials: false$", step):
+            problems.append("an actions/checkout step lacks `persist-credentials: false`")
+    return problems
+
+
 def ci_problems(text, makefile):
     """Everything wrong with the shape of the workflow and the Makefile recipe it relies on (empty = right shape)."""
     problems = []
@@ -264,7 +340,7 @@ def ci_problems(text, makefile):
     pack = jobs["pack"]
     build = pack.index("      - name: Build .plugin artifact")
     before_step = re.findall(r"(?m)^      - (?:uses|name|run): (.*)$", pack[:build])
-    if before_step != ["actions/checkout@v4"]:
+    if len(before_step) != 1 or not before_step[0].startswith("actions/checkout@"):
         problems.append(f"steps before the pack build step are {before_step}, want only the checkout")
     step = pack[build:]
     if "make pack" not in step:
@@ -275,6 +351,8 @@ def ci_problems(text, makefile):
             problems.append("something test-like runs before make pack in the pack job")
         if "umask 022" not in head:
             problems.append("no `umask 022` before make pack")
+    problems += action_problems(text)
+    problems += suites_problems(makefile)
     recipe = re.search(r"(?m)^validate:\n((?:\t.*\n)+)", makefile)
     if not recipe or recipe.group(1) != "\t@bash scripts/ci-gate.sh\n":
         problems.append("the Makefile validate recipe is not exactly `@bash scripts/ci-gate.sh`")
@@ -316,6 +394,18 @@ class WorkflowShapeTest(unittest.TestCase):
             "a long run block": (t.replace("run: make suites", "run: |\n" + "          echo x\n" * 30 + "          true"), m, "run: |"),
             "gate step no longer make validate": (t.replace("run: make validate", "run: bash scripts/ci-gate.sh"), m, "make validate"),
             "recipe changed": (t, m.replace("\t@bash scripts/ci-gate.sh\n", "\t@bash scripts/ci-gate.sh || true\n", 1), "recipe"),
+            "a tag-only uses": (t.replace("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0", "actions/setup-python@v5", 1), m, "40-hex"),
+            "a uses without version comment": (t.replace(" # v4.6.2", "", 1), m, "comment"),
+            "a checkout keeps credentials": (t.replace("          persist-credentials: false\n", "", 1), m, "persist-credentials"),
+            "test-lock swallowed with || true": (t, m.replace("\tbash tests/test-lock.sh\n", "\tbash tests/test-lock.sh || true\n", 1), "swallows"),
+            "test-lock swallowed with || :": (t, m.replace("\tbash tests/test-lock.sh\n", "\tbash tests/test-lock.sh || :\n", 1), "swallows"),
+            "test-lock swallowed with ; true": (t, m.replace("\tbash tests/test-lock.sh\n", "\tbash tests/test-lock.sh; true\n", 1), "swallows"),
+            "test-lock with a - prefix": (t, m.replace("\tbash tests/test-lock.sh\n", "\t-bash tests/test-lock.sh\n", 1), "swallows"),
+            "a suite line dropped": (t, m.replace("\tbash tests/test-hooks.sh\n", "", 1), "commands, want"),
+            "a suite command dropped, echo kept": (t, m.replace("\tbash tests/test-hooks.sh\n", "\t@true\n", 1), "suite 10"),
+            "two suites reordered": (t, m.replace("\tbash tests/test-registry.sh\n", "\tbash tests/test-scope-check.sh\n", 1).replace("\tbash tests/test-scope-check.sh\n\t@echo \"== suite: permission", "\tbash tests/test-registry.sh\n\t@echo \"== suite: permission", 1), "suite"),
+            "scorer block swallowed": (t, m.replace('exit 1; }\n\t@echo "== suite: GS1', 'exit 1; } || true\n\t@echo "== suite: GS1', 1), "scorer"),
+            ".IGNORE set": (t, m + "\n.IGNORE:\n", "IGNORE"),
         }
         for label, (text, makefile, want) in mutations.items():
             with self.subTest(mutation=label):

@@ -3,7 +3,7 @@
 # scripts/permission-check.sh + references/security/{tool-profiles,delegation,trust-levels}.json
 #
 # Same harness style as tests/test-scope-check.sh (no framework; PERMCHECK_ROOT sandbox via
-# mktemp -d). Wired into ci.yml as exactly ONE step (milestone constraint: this milestone may add
+# mktemp -d). Run by `make suites` (the CI suites job; it was one ci.yml step, milestone constraint: this milestone may add
 # no more than 1 CI step total), so the registry drift checks live HERE, not as extra steps.
 #
 # The drift block is the teeth of Milestone F: tool-profiles.json `tools` arrays must equal

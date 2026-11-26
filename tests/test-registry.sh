@@ -5,7 +5,7 @@
 # No framework dependency (same style as tests/test-workflow-state.sh) -- plain
 # bash test functions + a tiny assert library. Fixture request.json / bd
 # artifact dirs are written to a mktemp sandbox per test, never touching the
-# real repo state. Wired into ci.yml as exactly ONE step (milestone constraint:
+# real repo state. Run by `make suites` (the CI suites job; was one ci.yml step) (milestone constraint:
 # "เพิ่ม step ใหม่ได้ไม่เกิน 1 step สำหรับ Milestone B ทั้งก้อน").
 #
 # Usage: bash tests/test-registry.sh

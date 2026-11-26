@@ -4,7 +4,7 @@
 # approval scope + invalidation (scripts/approval.sh). ROADMAP-runtime-10.md Phase 6 /
 # 8.3 / 9. Same CI budget rule as every prior milestone (outputs/shode-roadmap/C/
 # 05-oliver-decisions.md: "1 AC = 1 test case ในสวีท ไม่ใช่ 1 CI section") -- this is the
-# ONE step Milestone D adds to ci.yml, covering all three new scripts in one file.
+# ONE suite Milestone D adds to `make suites` (it was one ci.yml step), covering all three new scripts in one file.
 #
 # No framework dependency, same tiny bash test harness as tests/test-workflow-state.sh /
 # tests/test-scope-check.sh. Every test runs in its own mktemp -d sandbox via

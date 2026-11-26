@@ -1,0 +1,7 @@
+# Keeps the SHA-pinned actions in .github/workflows/ci.yml current (tests/test_ci_wiring.py requires every `uses:` to be a full commit SHA).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

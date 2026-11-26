@@ -13,9 +13,9 @@
 #
 # No framework dependency (same style as tests/test-workflow-state.sh + tests/test-registry.sh)
 # -- plain bash test functions + a tiny assert library. Each test runs inside a
-# mktemp -d sandbox via SCOPECHECK_ROOT so tests never touch the real repo state. Wired
-# into ci.yml as exactly ONE step (milestone constraint: this milestone may add no more than 1
-# CI step total; this bd extends the SAME step, no new ci.yml step needed).
+# mktemp -d sandbox via SCOPECHECK_ROOT so tests never touch the real repo state. Run
+# by `make suites` (the CI suites job; it was one ci.yml step, milestone constraint: this milestone may add no more
+# than 1 CI step total; this bd extends the SAME suite, no new step needed).
 #
 # Usage: bash tests/test-scope-check.sh
 
