@@ -6,7 +6,7 @@ This file states no rule. The rules are in `AGENTS.md`, which is loaded on every
 
 Prerequisites:
 
-- **bash + jq + python3** for the gate — inline in `.github/workflows/ci.yml`, run locally with `make validate`. `jq`: `brew install jq` / `apt install jq`. The gate scripts use the python3 stdlib only; gate #27 also runs the A15 design-runner suite and the W9 eval suites (`eval/v4-security/tests`, `eval/shadow-floor/tests`, plus `eval/scenarios/core-4.0/check-freeze.sh`), which need **pytest** and **git >= 2.26** (locally `python3 -m pip install --require-hashes --only-binary :all: -r .github/requirements-ci.txt`; CI installs the same hash-pinned file after `actions/setup-python`), and without pytest `make validate` reports A15 and W9 as NOT CHECKED (red)
+- **bash + jq + python3** for the gate — `scripts/ci-gate.sh`, which `.github/workflows/ci.yml` runs as `make validate`, so it runs locally the same way. `jq`: `brew install jq` / `apt install jq`. The gate scripts use the python3 stdlib only; gate #27 also runs the A15 design-runner suite and the W9 eval suites (`eval/v4-security/tests`, `eval/shadow-floor/tests`, plus `eval/scenarios/core-4.0/check-freeze.sh`), which need **pytest** and **git >= 2.26** (locally `python3 -m pip install --require-hashes --only-binary :all: -r .github/requirements-ci.txt`; CI installs the same hash-pinned file after `actions/setup-python`), and without pytest `make validate` reports A15 and W9 as NOT CHECKED (red)
 - **make** + **zip** for packaging (`make pack`)
 - **git** + **gh CLI** for release/publish (or GitHub Actions)
 

@@ -138,7 +138,7 @@ flowchart LR
 
     MAP[".enforcement-map.json — 22 rules<br/>rule → owner → trigger → source_of_truth<br/>→ verification → anchor"]
 
-    subgraph CI["CI — 24 gates (make validate = ci.yml)"]
+    subgraph CI["CI — 24 gates (make validate = scripts/ci-gate.sh)"]
         direction TB
         G21["#21 anchor ของทุกกฎยังอยู่ใน source จริง<br/>#23 lazy-load: owner เอื้อมถึง reference"]
         G16["#16 #20 #22 budgets — preload · agent+preload · dispatch graph<br/>ratchet: ลงได้ ขึ้นไม่ได้"]

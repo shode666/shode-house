@@ -2,11 +2,11 @@
 """CI gate #27 wiring (v4 ADR §7 W1): how A15 (the design-runner suite, required in every mode) runs.
 
 - Bella W1 r2 N1 / W12 F-12: a missing tests/test_design_run.py must be red, never a silent ok. The A15
-  block of the gate script is cut out of .github/workflows/ci.yml and executed with bash in a scratch
+  block of the gate script is cut out of scripts/ci-gate.sh and executed with bash in a scratch
   directory, so the real shell text is tested, not a copy of it.
 - Chris W1 r2 R2-3: pytest on the Ubuntu runner comes from a Python that actions/setup-python installs
-  (not the PEP 668 system python3), before the gate step, so `make validate`'s extraction (the first
-  `run: |` block) still finds the gate; the in-gate fallback uses a private venv, never `pip --user`.
+  (not the PEP 668 system python3), before the gate step (which is `make validate`, i.e. scripts/ci-gate.sh);
+  the in-gate fallback uses a private venv, never `pip --user`.
 - Chris W1 follow-up C-7 / Sentinel F6: the fallback installs from the same hash-pinned file, and its temp dir
   is removed in every case, also when pip fails.
 - W9 wiring (bd v7u.4.7; shode-house-nl7): gate #27 also runs the historical 4.0/4.0.1 freeze checks,
@@ -24,20 +24,14 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CI = ROOT / ".github/workflows/ci.yml"
+GATE = ROOT / "scripts/ci-gate.sh"
+MAKEFILE = ROOT / "Makefile"
 
 
 def gate_script():
-    """The gate exactly as `make validate` extracts it (Makefile awk: first `run: |` block, 10-space indent)."""
-    out, on = [], False
-    for line in CI.read_text().splitlines():
-        if re.match(r"^        run: \|", line):
-            on = True
-            continue
-        if on and re.match(r"^      - name:", line):
-            break
-        if on:
-            out.append(line[10:] if line.startswith(" " * 10) else line)
-    return out
+    """The gate: scripts/ci-gate.sh from its first executable line (the header above it is comments + a root guard)."""
+    lines = GATE.read_text().splitlines()
+    return lines[lines.index("set +e -u -o pipefail"):]
 
 
 def block(first, last):
@@ -124,8 +118,11 @@ class A15WiringTest(unittest.TestCase):
         self.assertTrue(0 <= pip < gate and "-r .github/requirements-ci.txt" in text[pip:text.index("\n", pip)],
                         "pytest must be installed (from the hash-pinned file) before the gate step")
         self.assertIn("pytest==", (ROOT / ".github/requirements-ci.txt").read_text())
-        first_block = text.index("        run: |")
-        self.assertGreater(first_block, gate, "a `run: |` step before the gate would become make validate's script")
+        # the gate step is exactly `make validate`, and that recipe is exactly the gate script: no extraction left
+        self.assertRegex(text[gate:], r"\A[^\n]*\n(?:        [^\n]*\n)*?        run: make validate\n")
+        recipe = re.search(r"(?m)^validate:\n((?:\t.*\n)+)", MAKEFILE.read_text())
+        self.assertTrue(recipe, "Makefile has no validate recipe")
+        self.assertEqual("\t@bash scripts/ci-gate.sh\n", recipe.group(1))
 
     def test_venv_fallback_installs_from_the_pinned_file(self):
         """C-7: the CI-only fallback pins the same versions and hashes as the setup step."""

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """CI workflow wiring outside gate #27's A15/W9 block (W10a, decision U21; bd v7u.4.7 notes).
 
+- The workflow has three jobs (gate, suites, pack), each on the pinned runner with a timeout; `pack` needs both
+  others and builds on a fresh runner where nothing has run before `make pack`; no gate text lives in the YAML
+  (the gate step is `make validate` = scripts/ci-gate.sh, the suites step is `make suites`).
 - Sentinel W1 follow-up F6: the workflow declares a top-level least-privilege `permissions:` block.
 - Sentinel F6 / Chris W1 follow-up C-7: pytest is installed only from the hash-pinned .github/requirements-ci.txt
   (setup step and the in-gate venv fallback alike); every requirement is pinned with `==` and carries a hash.
@@ -12,8 +15,8 @@
 - CI #24a (Bella W10a S-1): a namespaced `<plugin>:<skill>` § Y section reference is checked, not skipped.
 - CI #17 (U22 slice D): the design-intel smoke writes its payloads into a per-run `mktemp -d` under $TMPDIR that is
   removed on exit, never into fixed /tmp names (concurrent gates collided on /tmp/ds.json; fixed names are predictable).
-- U22 iter 2: no pid-based (`$$`) temp name anywhere in the workflow; the build step uses `mktemp` + an EXIT trap.
-The #17, #21, #23 and #24 sections are cut out of .github/workflows/ci.yml together with the gate prelude and run with bash
+- U22 iter 2: no pid-based (`$$`) temp name anywhere in the workflow or the gate script; the build step uses `mktemp` + an EXIT trap.
+The #17, #21, #23 and #24 sections are cut out of scripts/ci-gate.sh together with the gate prelude and run with bash
 in a scratch tree, so the real shell text is tested, not a copy of it.
 Run: python3 tests/test_ci_wiring.py   (CI gate #27 runs it; stdlib + bash + jq)
 """
@@ -27,6 +30,10 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CI = ROOT / ".github/workflows/ci.yml"
+GATE = ROOT / "scripts/ci-gate.sh"
+MAKEFILE = ROOT / "Makefile"
+ALLOWLIST = ROOT / ".pack-allowlist"
+RUNNER = "ubuntu-26.04"
 REQ = ROOT / ".github/requirements-ci.txt"
 # The PATH every extracted gate section runs with; the bash/jq probe reads the same PATH, so a tool found only on
 # the caller's PATH skips the test instead of failing it inside the gate run.
@@ -35,7 +42,7 @@ GATE_PATH = "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
 
 class MaintenanceEvalWiringTest(unittest.TestCase):
     def test_maintenance_change_tests_are_in_make_validate_gate(self):
-        text = CI.read_text()
+        text = GATE.read_text()
         self.assertIn("eval/maintenance-change/tests", text)
         self.assertRegex(text, r"for d in[^\n]*eval/maintenance-change/tests")
 
@@ -45,17 +52,9 @@ def gate_has(*tools):
 
 
 def gate_script():
-    """The gate exactly as `make validate` extracts it (Makefile awk: first `run: |` block, 10-space indent)."""
-    out, on = [], False
-    for line in CI.read_text().splitlines():
-        if re.match(r"^        run: \|", line):
-            on = True
-            continue
-        if on and re.match(r"^      - name:", line):
-            break
-        if on:
-            out.append(line[10:] if line.startswith(" " * 10) else line)
-    return out
+    """The gate: scripts/ci-gate.sh from its first executable line (the header above it is comments + a root guard)."""
+    lines = GATE.read_text().splitlines()
+    return lines[lines.index("set +e -u -o pipefail"):]
 
 
 def section(number):
@@ -225,6 +224,105 @@ class NamespacedSectionRefTest(unittest.TestCase):
         self.assertIn("[A-Za-z0-9/_.:-]*", sub24a())
         self.assertIn("fail=0", self.run24(["nothing to check here"]))
 
+def ci_jobs(text):
+    """The jobs of a workflow as {name: body}. A top-level `jobs:` key and 2-space job keys; no YAML library needed."""
+    body = text[text.index("\njobs:\n") + len("\njobs:\n"):]
+    parts = re.split(r"(?m)^  ([a-z][\w-]*):\n", body)
+    return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+
+
+def ci_problems(text, makefile):
+    """Everything wrong with the shape of the workflow and the Makefile recipe it relies on (empty = right shape)."""
+    problems = []
+    live = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+    jobs = ci_jobs(text)
+    if sorted(jobs) != ["gate", "pack", "suites"]:
+        return [f"jobs are {sorted(jobs)}, want gate, suites, pack"]
+    if "ubuntu-latest" in live:
+        problems.append("ubuntu-latest is used")
+    for name, job in jobs.items():
+        if not re.search(rf"(?m)^    runs-on: {re.escape(RUNNER)}$", job):
+            problems.append(f"job {name} is not on {RUNNER}")
+        if not re.search(r"(?m)^    timeout-minutes: [1-9]\d*$", job):
+            problems.append(f"job {name} has no timeout-minutes")
+    needs = re.search(r"(?m)^    needs: \[([^\]]*)\]$", jobs["pack"])
+    if not needs or sorted(n.strip() for n in needs.group(1).split(",")) != ["gate", "suites"]:
+        problems.append("pack does not need exactly [gate, suites]")
+    for name in ("gate", "suites"):
+        if re.search(r"(?m)^    needs:", jobs[name]):
+            problems.append(f"job {name} must not wait for another job")
+    if "        run: make validate\n" not in jobs["gate"] + "\n":
+        problems.append("the gate job does not run `make validate`")
+    if "        run: make suites\n" not in jobs["suites"] + "\n":
+        problems.append("the suites job does not run `make suites`")
+    if 'sec "' in text:
+        problems.append("gate text (`sec \"`) is inlined in the workflow")
+    for block in re.findall(r"(?ms)^ +run: \|\n(.*?)(?=^      - |\Z)", text):
+        if len(block.rstrip().splitlines()) > 20:
+            problems.append(f"a `run: |` block of {len(block.rstrip().splitlines())} lines (the gate/suites belong in scripts/Makefile)")
+    # pack: a fresh runner, nothing but the checkout before the build step, nothing test-like before `make pack`
+    pack = jobs["pack"]
+    build = pack.index("      - name: Build .plugin artifact")
+    before_step = re.findall(r"(?m)^      - (?:uses|name|run): (.*)$", pack[:build])
+    if before_step != ["actions/checkout@v4"]:
+        problems.append(f"steps before the pack build step are {before_step}, want only the checkout")
+    step = pack[build:]
+    if "make pack" not in step:
+        problems.append("the pack build step does not run make pack")
+    else:
+        head = "\n".join(l for l in step[:step.index("make pack")].splitlines() if not l.lstrip().startswith("#"))
+        if re.search(r"make (validate|suites)|bash tests/|python3 tests/|tests/test", head):
+            problems.append("something test-like runs before make pack in the pack job")
+        if "umask 022" not in head:
+            problems.append("no `umask 022` before make pack")
+    recipe = re.search(r"(?m)^validate:\n((?:\t.*\n)+)", makefile)
+    if not recipe or recipe.group(1) != "\t@bash scripts/ci-gate.sh\n":
+        problems.append("the Makefile validate recipe is not exactly `@bash scripts/ci-gate.sh`")
+    return problems
+
+
+class WorkflowShapeTest(unittest.TestCase):
+    """Three jobs: `gate` and `suites` in parallel, then `pack` on a fresh runner; no gate text in the YAML."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = CI.read_text(encoding="utf-8")
+        cls.makefile = MAKEFILE.read_text(encoding="utf-8")
+
+    def test_the_real_workflow_has_the_right_shape(self):
+        self.assertEqual([], ci_problems(self.text, self.makefile))
+
+    def test_the_gate_script_exists_and_is_not_shipped(self):
+        self.assertTrue(GATE.is_file())
+        entries = [l.split()[0] for l in ALLOWLIST.read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        for entry in entries:
+            with self.subTest(entry=entry):
+                self.assertFalse("scripts/ci-gate.sh".startswith(entry.rstrip("/") + "/") or entry == "scripts/ci-gate.sh",
+                                 "the gate script is maintainer-only and must not be in .pack-allowlist")
+
+    def test_every_mutation_of_the_shape_is_red(self):
+        t, m = self.text, self.makefile
+        mutations = {
+            "a job on ubuntu-latest": (t.replace(f"runs-on: {RUNNER}", "runs-on: ubuntu-latest", 1), m, "not on"),
+            "a job without timeout": (t.replace("    timeout-minutes: 10\n", "", 1), m, "timeout-minutes"),
+            "pack without suites": (t.replace("needs: [gate, suites]", "needs: [gate]"), m, "need exactly"),
+            "pack without gate": (t.replace("needs: [gate, suites]", "needs: [suites]"), m, "need exactly"),
+            "gate needs suites": (t.replace("  gate:\n", "  gate:\n    needs: [suites]\n", 1), m, "must not wait"),
+            "a suite run before make pack": (t.replace("          make pack\n", "          bash tests/test-registry.sh\n          make pack\n", 1), m, "before make pack"),
+            "make validate before make pack": (t.replace("          make pack\n", "          make validate\n          make pack\n", 1), m, "before make pack"),
+            "no umask before make pack": (t.replace("          umask 022\n", ""), m, "umask"),
+            "a step before the pack build": (t.replace("      - name: Build .plugin artifact", "      - run: make suites\n      - name: Build .plugin artifact"), m, "steps before"),
+            "a gate command inlined": (t.replace("run: make validate", 'run: |\n          sec "1. x"'), m, "inlined"),
+            "a long run block": (t.replace("run: make suites", "run: |\n" + "          echo x\n" * 30 + "          true"), m, "run: |"),
+            "gate step no longer make validate": (t.replace("run: make validate", "run: bash scripts/ci-gate.sh"), m, "make validate"),
+            "recipe changed": (t, m.replace("\t@bash scripts/ci-gate.sh\n", "\t@bash scripts/ci-gate.sh || true\n", 1), "recipe"),
+        }
+        for label, (text, makefile, want) in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual((t, m), (text, makefile), "the mutation changed nothing")
+                self.assertTrue(any(want in p for p in ci_problems(text, makefile)), (label, ci_problems(text, makefile)))
+
+
 class WorkflowPermissionsAndPinsTest(unittest.TestCase):
     def test_top_level_permissions_are_read_only(self):
         text = CI.read_text()
@@ -247,14 +345,15 @@ class WorkflowPermissionsAndPinsTest(unittest.TestCase):
         self.assertLessEqual({"iniconfig", "packaging", "pluggy", "pygments", "exceptiongroup", "tomli"}, names)
 
     def test_every_pip_install_uses_the_hash_pinned_file(self):
-        installs = [l for l in CI.read_text().splitlines() if "pip install" in l and not l.strip().startswith("#")]
-        self.assertGreaterEqual(len(installs), 2, installs)               # the setup step + the venv fallback
+        text = CI.read_text() + "\n" + GATE.read_text()
+        installs = [l for l in text.splitlines() if "pip install" in l and not l.strip().startswith("#")]
+        self.assertGreaterEqual(len(installs), 2, installs)    # the setup step (ci.yml) + the venv fallback (gate script)
         for line in installs:
             with self.subTest(line=line):
                 self.assertIn("--require-hashes", line)
                 self.assertIn("-r .github/requirements-ci.txt", line)
                 self.assertNotIn("--user", line)
-        self.assertNotRegex(CI.read_text(), r"pip install --quiet pytest\b")
+        self.assertNotRegex(text, r"pip install --quiet pytest\b")
 
 
 @unittest.skipUnless(gate_has("bash", "python3", "mktemp"), "needs bash + python3 + mktemp on the gate PATH")
@@ -293,12 +392,14 @@ class WorkflowTempNamesTest(unittest.TestCase):
     unpack dir with an EXIT trap."""
     def build_step(self):
         text = CI.read_text(encoding="utf-8")
+        text = text[text.index("\n  pack:\n"):]
         start = text.index("      - name: Build .plugin artifact\n")
         stop = text.index("\n      - name:", start + 1)
         return text[start:stop]
 
     def test_no_pid_based_temp_name(self):
         self.assertNotIn("$$", CI.read_text(encoding="utf-8"))
+        self.assertNotIn("$$", GATE.read_text(encoding="utf-8"))
 
     def test_build_step_uses_mktemp_and_an_exit_trap(self):
         step = self.build_step()

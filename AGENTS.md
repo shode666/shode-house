@@ -85,13 +85,13 @@ The rules are stated in this file and nowhere else. The linked files add detail,
 ## Plugin
 
 - `plugin.json` version = SemVer and `marketplace.json` follows; the `## Repo Invariants` heading carries the same version (CI #9). Artifact = `shode-house-v<MAJOR>.<MINOR>.<PATCH>.plugin`.
-- Build only with `make pack`; never zip by hand outside the Makefile.
+- Build only with `make pack`; never zip by hand outside the Makefile. The release artifact is the CI `pack` job's archive, built in a fresh checkout; its entry modes equal the git index (CI #26).
 - What ships = `.pack-allowlist` only: a path read at run time, or one the plugin format / the licence needs. `docs/`, `AGENTS.md`, `CLAUDE.md`, `README.md` and `CHANGELOG.md` never ship; shipped text never points at a path that does not ship, and a document it has to open lives under `references/` (CI #26).
 - 🔴 **Cowork validator** (stricter than CLI validate and the JSON schema; fails silently with "Plugin validation failed"):
   - `plugin.json` `description` and `marketplace.json` top-level `description` ≤ 200 chars, `marketplace.json` `plugins[].description` ≤ 100 chars; all ASCII only: no em-dash, no Thai, no Unicode quote (CI #4).
   - `skills` / `commands` / `agents` = arrays of path strings starting with `./`, never objects, no `..`, no `\` (CI #7). Nested skill buckets must be declared in `skills` (CI #3).
   - No field outside the manifest schema (`additionalProperties: false`; allowed list in the docs file). No gate checks this.
-- Before a version bump: detail / marketing copy goes in `README.md`, never in a manifest description; **drag-drop test in Cowork before release** (CLI validate passing ≠ Cowork passing); a new failure that Cowork enforces and the schema does not → add the rule to this file and a check to `.github/workflows/ci.yml` in the same change.
+- Before a version bump: detail / marketing copy goes in `README.md`, never in a manifest description; **drag-drop test in Cowork before release** (CLI validate passing ≠ Cowork passing); a new failure that Cowork enforces and the schema does not → add the rule to this file and a check to the gate script `scripts/ci-gate.sh` in the same change.
 - On a "Plugin validation failed": read the earlier lessons with `git log --grep="validator"` before changing anything.
 
 ## Repo

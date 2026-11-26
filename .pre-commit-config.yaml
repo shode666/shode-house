@@ -3,8 +3,8 @@
 #
 # Local commits run only off-the-shelf hygiene hooks below — no custom script
 # executes on your machine. The full invariant + lint gate lives in
-# .github/workflows/ci.yml (inline bash + jq). `make validate` extracts and runs
-# that exact script locally — same source of truth, no duplicated logic.
+# scripts/ci-gate.sh (bash + jq + python3). `make validate` runs that exact script, and the
+# CI `gate` job runs `make validate` — same source of truth, no duplicated logic.
 # (v3.12.1: ก่อนหน้านี้ไฟล์นี้อ้าง `make validate` ทั้งที่ Makefile ไม่มี target นั้น)
 
 repos:

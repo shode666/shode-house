@@ -189,8 +189,8 @@ class RosterTest(unittest.TestCase):
 
     def test_ci_model_whitelist_is_exactly_the_two_host_pinned_types(self):
         """SEC-4: CI #5's claude-fable-5 allow-list is secure + design and nothing else."""
-        ci = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertRegex(ci, r'(?m)^\s+F5="secure design"')
+        ci = (ROOT / "scripts/ci-gate.sh").read_text()  # the gate script, which CI runs as `make validate`
+        self.assertRegex(ci, r'(?m)^F5="secure design"')
         self.assertEqual(sorted(FABLE_PINNED), sorted(re.search(r'F5="([^"]+)"', ci).group(1).split()))
 
     def test_domain_content_is_reference_not_skill_or_agent(self):

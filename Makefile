@@ -1,16 +1,17 @@
 # shode-house dev-loop. Tools: bash, jq, zip (pack/stats/skills) + python3 (stdlib gate scripts + tests; gate #27 A15 + W9 eval suites also need pytest (.github/requirements-ci.txt) + git >= 2.26)
 # gh = publish only
-# Usage: make validate | make pack | make stats | make skills
+# Usage: make validate | make suites | make pack | make stats | make skills
 # NOTE: ใช้ TAB เป็น recipe prefix (v3.12) — `.RECIPEPREFIX` ต้องการ GNU Make >= 3.82
 #       แต่ macOS ยังมาพร้อม 3.81 -> `make pack` เดิมพังบนเครื่อง maintainer ("missing separator")
-.PHONY: help validate pack build stats skills clean test-team-package test-team-candidate
+.PHONY: help validate suites pack build stats skills clean test-team-package test-team-candidate
 
 VERSION := $(shell jq -r .version .claude-plugin/plugin.json)
 PLUGIN  := shode-house-v$(VERSION).plugin
 
 help:
 	@echo "shode-house dev-loop:"
-	@echo "  make validate   run the same invariant + lint gate as CI (bash + jq)"
+	@echo "  make validate   run the same invariant + lint gate as CI (scripts/ci-gate.sh: bash + jq + python3)"
+	@echo "  make suites     run the test suites CI runs next to the gate (the CI suites job)"
 	@echo "  make pack       build $(PLUGIN) artifact (zip)"
 	@echo "  make stats      skill/agent counts"
 	@echo "  make skills     list shipped skills by bucket"
@@ -19,14 +20,51 @@ help:
 	@echo "  scripts/team-run-check.py <run.jsonl>  score a claude -p stream-json team run against harness invariants"
 	@echo "  make clean      remove the built .plugin artifact"
 
-# validate = รัน gate ชุดเดียวกับ CI ในเครื่อง (v3.12 — เดิม .pre-commit-config อ้าง target นี้ทั้งที่ไม่มีอยู่)
-# แหล่งความจริงเดียวคือ .github/workflows/ci.yml -> ดึง inline script ออกมารัน ไม่ copy logic ซ้ำ
+# validate = รัน gate ชุดเดียวกับ CI ในเครื่อง: scripts/ci-gate.sh คือแหล่งความจริงเดียว (CI job `gate` เรียก make validate)
+# ไม่มี gate text ใน ci.yml และไม่มีการดึง block ออกมาอีกต่อไป
 validate:
-	@g=$$(mktemp -t shode-gate.XXXXXX) && trap 'rm -f "$$g"' EXIT && trap 'exit 1' HUP INT TERM && \
-	 awk '/^        run: \|/{f=1;next} f&&/^      - name:/{exit} f{sub(/^          /,"");print}' \
-	   .github/workflows/ci.yml > "$$g" && \
-	 test -s "$$g" || { echo "make validate: extract gate script failed (ci.yml layout changed)"; rm -f "$$g"; exit 1; }; \
-	 bash "$$g"; rc=$$?; rm -f "$$g"; exit $$rc
+	@bash scripts/ci-gate.sh
+
+# suites = the test suites CI's `suites` job runs, in the order they always ran, one after the other in ONE checkout
+# (registry and scope-check rewrite tracked files, so they must not run in parallel). The first failing command
+# stops the target with its exit code; nothing is swallowed. Needs bash, jq, zip/unzip, git, python3 and node.
+suites:
+	@echo "== suite: per-run usage comparator =="
+	python3 -m unittest discover -s tests -p 'test_usage_report.py'
+	@echo "== suite: optional drain template contract (mock host, not live qualification) =="
+	node --test tests/test_drain_template.mjs
+	@echo "== suite: eval scorer smoke (committed recorded transcripts, no live agent run) =="
+	@set -e; \
+	 echo "-- PASS-path fixture (routing-ok / GS2-implement-backend) --"; \
+	 python3 scripts/eval-scorer.py eval/fixtures/transcripts/routing-ok \
+	   --scenario GS2-implement-backend --project eval/fixtures/outputs-root --bd-id bd-101; \
+	 echo; \
+	 echo "-- FAIL-path fixture (routing-wrong-order / GS2-implement-backend) -- must exit non-zero --"; \
+	 if python3 scripts/eval-scorer.py eval/fixtures/transcripts/routing-wrong-order \
+	     --scenario GS2-implement-backend --project eval/fixtures/outputs-root --bd-id bd-101; then \
+	   echo "FATAL: routing-wrong-order fixture did not fail the scorer -- gate is not enforcing"; \
+	   exit 1; \
+	 fi; \
+	 echo "confirmed: scorer correctly FAILs on a known-bad recorded transcript"; \
+	 echo "-- behaviour opt-in (failure_modes.yaml G1/G3): behaviour-ok must PASS, routing-ok must FAIL --"; \
+	 B="--scenario GS2-implement-backend --project eval/fixtures/outputs-root --bd-id bd-101 --behaviour-checks G1,G3"; \
+	 python3 scripts/eval-scorer.py eval/fixtures/transcripts/behaviour-ok $$B && ! python3 scripts/eval-scorer.py eval/fixtures/transcripts/routing-ok $$B || { echo "FATAL: behaviour opt-in gate is not enforcing"; exit 1; }
+	@echo "== suite: GS1 E2E regression gate (vs eval/baseline/e2e-golden/GS1-BASELINE.md) =="
+	python3 scripts/eval-regression-gate.py
+	@echo "== suite: workflow-state.sh =="
+	bash tests/test-workflow-state.sh
+	@echo "== suite: registry + route/policy-check =="
+	bash tests/test-registry.sh
+	@echo "== suite: scope-check =="
+	bash tests/test-scope-check.sh
+	@echo "== suite: permission-check =="
+	bash tests/test-permission-check.sh
+	@echo "== suite: reliability =="
+	bash tests/test-reliability.sh
+	@echo "== suite: hooks fixtures =="
+	bash tests/test-hooks.sh
+	@echo "== suite: lock primitive =="
+	bash tests/test-lock.sh
 
 # What ships = .pack-allowlist, the single list (one path per line; a directory ships recursively).
 # The recipe names no path of its own: add or remove a shipped path THERE, never here.

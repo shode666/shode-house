@@ -595,7 +595,7 @@ class RunnerWiringTest(unittest.TestCase):
 
 class WiringAndDocsTest(unittest.TestCase):
     def test_ci_gate_27_and_agents_md_list_the_battery_freeze(self):
-        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        ci = (ROOT / "scripts/ci-gate.sh").read_text()  # CI #27 lives in the gate script, which CI runs as `make validate`
         self.assertIn("bash eval/scenarios/battery-4.0.1/check-freeze.sh", ci)
         self.assertIn("W9 battery-4.0.1 freeze: eval/scenarios/battery-4.0.1/check-freeze.sh missing -- NOT CHECKED", ci)
         self.assertIn("test_battery_401", ci)
