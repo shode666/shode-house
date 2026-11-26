@@ -9,7 +9,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semver](http
 
 ### Changed
 
-- The GitHub marketplace ships only `cook` as user-invocable in skill metadata. The other 19 skills remain available for internal loading on hosts that honor the visibility flag.
+- **`cook` is the only registered skill in the marketplace trees** (`plugins/shode-house`, `plugins/shode-house-antigravity`). The other 19 skills are no longer flat `skills/<name>/` roots; they ship only under `knowledge/skills/<bucket>/<name>/` and are read with Read when a step, a preload or a delegation loads `shode-house:<name>`. `scripts/pack-team.py` appends one generated paragraph (the file-skills map) to the six agents, the router style and `cook`, and each agent's footer names the files of its former preloads to read before any other step. Agent frontmatter, `model:` and the `skills:` line stay verbatim; the source repository and the `make pack` archive still carry the 20 skills.
+- The Codex manifests (`.codex-plugin/plugin.json`, root `plugin.json`) point `skills` at `./skills/cook/`.
+- Every non-entry skill source still passes the generated-copy reference checks (S2I-1 / R53 / S23-9) although no flat copy is written.
+- Replaces the first 4.2.1 attempt (a1b359b), which only marked the 19 skills `user-invocable: false`: that hid them from the `/` menu but not from the plugin page or the model's skill list, and it broke the security-pinned `drain` frontmatter unit (gate red on a1b359b). The 19 lines are removed again.
+
+### Known limitations
+
+- Host preload is replaced by a read instruction in each agent's footer, which the host does not enforce the way it enforces `skills:` preload.
+
+### Validation status
+
+- Live routing probe on the maintainer's Mac (Claude Code CLI, `--plugin-dir`, Sonnet, one run per workflow, Write/Edit disabled; the v4.2.0 tree as control): the host listed only `shode-house:cook` (20 skills on v4.2.0). `init`, `spec` and `review` read the matching workflow file and dispatched `plan` / `verify` (on v4.2.0 `review` skipped its workflow file); `implement` dispatched `build` on the single-file fast path and `consult` answered directly in both arms. No Skill call named an unregistered skill, and the agents read their former preloads from `knowledge/`. In print mode the first read of a plugin file outside the project was refused in both arms. Behavioral qualification beyond this N=1 probe: not run.
 
 ## [4.2.0] — 2026-11-22
 

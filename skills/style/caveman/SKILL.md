@@ -1,6 +1,5 @@
 ---
 name: caveman
-user-invocable: false
 description: Switch to an ultra-compressed reply style that drops filler but keeps technical terms, code, numbers and security warnings verbatim, only when the user explicitly asks for terse output. It is never the default and ends when the user asks for normal prose.
 ---
 

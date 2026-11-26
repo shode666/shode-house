@@ -3,7 +3,7 @@
   "name": "shode-house",
   "version": "4.2.1",
   "description": "Shode House for Codex: coordinator, six role contracts and fresh review workers. Codex 0.155.1 did not load plugin hooks on the marketplace tree route.",
-  "skills": "./skills/",
+  "skills": "./skills/cook/",
   "extensions": {
     "com.openai": {
       "hooks": "./codex-hooks/hooks.json",

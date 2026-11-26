@@ -1,6 +1,5 @@
 ---
 name: shode-house-discipline
-user-invocable: false
 description: Team conduct for evidence, scope, language and handoff. Not phase order, ownership or the safety floor.
 ---
 

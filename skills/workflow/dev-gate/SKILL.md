@@ -1,6 +1,5 @@
 ---
 name: dev-gate
-user-invocable: false
 description: Apply test-first development and quality gates during implementation or refactor of production code, ending with validation evidence before handoff. Not for spikes, generated code, pure configuration changes, or investigating a problem whose cause is still unknown.
 ---
 

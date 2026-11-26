@@ -1,6 +1,5 @@
 ---
 name: slo
-user-invocable: false
 description: Define reliability targets for a production service, covering service level indicators and objectives, error budget policy and burn-rate alerting. Not for responding to a live outage, nor for internal tools or one-off batch jobs.
 ---
 

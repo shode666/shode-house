@@ -1,8 +1,8 @@
 # Shode House 4.2.1 host notes
 
-All 6 role sources and 20 skills are preserved under knowledge/. The agent files and skill roots at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed to their knowledge/ copies, plus a generated resolution footer; Use cook as the entry.
+All 6 role sources and 20 skills are preserved under knowledge/. Only `cook` is registered as a skill; the other 19 are read from knowledge/ when a step loads them. The agent files and the cook skill at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed to their knowledge/ copies, plus a generated resolution footer (agents read their former preloads); Use cook as the entry.
 
-- Claude Code: `.claude-plugin` manifest, flat skills, agents; no commands (`/shode-house:cook` is the entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to native registered agents.
+- Claude Code: `.claude-plugin` manifest, one registered skill (`cook`; the other 19 are read from knowledge/), agents; no commands (`/shode-house:cook` is the entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to native registered agents.
 - Codex: the `cook` skill coordinates genuine separate workers using the six generated role contracts. Codex 0.155.1 selected the root portable manifest on the marketplace tree route and loaded no plugin hooks. On a route that loads the bundle, lifecycle hooks require trust and Python 3. Hook text is not authentication; shell commands and per-role model, tool and scope isolation stay ADVISORY-ONLY.
 - Cursor: skills run in one session; there is no verified router. Never replace delegation with role-play or claim independent review without a genuine separate worker.
 - On hosts without the router style the safety floor is in the `cook` skill (other shode-house skills point to it). Keep the host's own command approval and sandbox enabled for shell and MCP actions.

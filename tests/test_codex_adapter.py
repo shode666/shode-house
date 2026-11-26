@@ -87,6 +87,18 @@ class CodexPackageTest(unittest.TestCase):
             "knowledge/references/workflows/init.md",
             # bd shode-house-7od: the bind command became the plugin-root form; the hook that recognises it ships in this tree
             "hooks/scripts/guard-scope-write.sh",
+            # 4.2.1 cook-only surface: the 19 non-entry flat skills are gone (their knowledge/ copies lose the
+            # 4.2.1-candidate `user-invocable` line); agents, the router style and cook gain the file-skills paragraph.
+            *("agents/%s.md" % n for n in ("build", "design", "operate", "plan", "secure", "verify")),
+            "output-styles/shode-house.md",
+            *("skills/%s/SKILL.md" % n for n in (
+                "review-checklist", "shode-house-deliverable", "shode-house-discipline")),
+            *("knowledge/skills/%s/SKILL.md" % n for n in (
+                "workflow/api-contract", "workflow/automate-test", "workflow/data-migration", "workflow/decompose",
+                "workflow/dev-gate", "workflow/diagnose", "ops/drain", "ops/incident", "ops/secure", "ops/slo",
+                "ui/ui-test", "ui/web-q", "style/caveman", "discipline/domain-core", "discipline/review-checklist",
+                "discipline/shode-house-deliverable", "discipline/shode-house-discipline",
+                "discipline/shode-house-routing", "discipline/shode-house-workflow")),
         }
         tree = ROOT / "plugins/shode-house"
         previous = subprocess.run(
@@ -115,6 +127,12 @@ class CodexPackageTest(unittest.TestCase):
         self.assertNotIn("extensions", claude)
         portable = json.loads(entries["plugin.json"])
         openai = portable["extensions"]["com.openai"]
+        for manifest in (codex, portable):
+            root = manifest["skills"].removeprefix("./")
+            self.assertEqual(
+                ["skills/cook/SKILL.md"],
+                sorted(p for p in entries if p.startswith(root) and p.endswith("/SKILL.md")),
+            )
         self.assertEqual("./codex-hooks/hooks.json", openai["hooks"])
         self.assertEqual("./skills/cook/SKILL.md", openai["onboardingSkill"])
         # Claude Code auto-discovers hooks/hooks.json; the Codex bundle must never take that path.

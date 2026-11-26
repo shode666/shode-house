@@ -1,6 +1,5 @@
 ---
 name: web-q
-user-invocable: false
 description: Audit and improve a public-facing website across Core Web Vitals, performance budgets, SEO, structured data and security headers against agreed measured thresholds. Not for internal or API-only services, nor for functional or accessibility testing of one changed screen.
 ---
 

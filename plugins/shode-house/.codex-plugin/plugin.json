@@ -9,7 +9,7 @@
   "repository": "https://github.com/shode666/shode-house",
   "license": "MIT",
   "description": "Shode House for Codex: coordinator, six role contracts and fresh review workers. Codex 0.155.1 did not load plugin hooks on the marketplace tree route.",
-  "skills": "./skills/",
+  "skills": "./skills/cook/",
   "hooks": "./codex-hooks/hooks.json",
   "extensions": {
     "com.openai": {

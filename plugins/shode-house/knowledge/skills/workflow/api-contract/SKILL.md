@@ -1,6 +1,5 @@
 ---
 name: api-contract
-user-invocable: false
 description: Protect compatibility when changing a shared or public interface, such as a REST, GraphQL, gRPC, event or SDK contract with consumers outside the deploy unit, through breaking-change classification, versioning, deprecation and contract tests. Not for private function signatures or internal database schema.
 ---
 

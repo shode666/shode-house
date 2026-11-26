@@ -69,6 +69,7 @@ STYLE_FLOOR = (STYLE_KIND.begin, STYLE_KIND.end)
 # The style whose floor the `cook` skill carries on skills-only hosts (erratum 1 §5.8.1 item 4).
 FLOOR_STYLE = "output-styles/shode-house.md"
 ENTRY_SKILL = "skills/cook/SKILL.md"
+ENTRY_SOURCE = "skills/workflow/cook/SKILL.md"
 # Files that may carry a floor block in the tree; anything else carrying one is red.
 FLOOR_CARRIERS = re.compile(r"^(?:knowledge/)?(?:agents|output-styles)/[^/]+\.md$|^skills/cook/SKILL\.md$")
 
@@ -133,8 +134,8 @@ CODEX_DESCRIPTION = ("Shode House for Codex: coordinator, six role contracts and
                      "Codex 0.155.1 did not load plugin hooks on the marketplace tree route.")
 # erratum 1 §5.8.1 "HOST-NOTES" bullets, persona-free; Antigravity per W0 P4 (agy 1.2.2 validate).
 HOST_BULLETS = (
-    "- Claude Code: `.claude-plugin` manifest, flat skills, agents; no commands (`/shode-house:cook` is the "
-    "entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to "
+    "- Claude Code: `.claude-plugin` manifest, one registered skill (`cook`; the other 19 are read from "
+    "knowledge/), agents; no commands (`/shode-house:cook` is the entry), the guard hooks (`hooks/hooks.json` with the scripts it calls). The router style delegates to "
     "native registered agents.\n"
     "- Codex: the `cook` skill coordinates genuine separate workers using the six generated role contracts. "
     "Codex 0.155.1 selected the root portable manifest on the marketplace tree route and loaded no plugin hooks. "
@@ -149,7 +150,8 @@ HOST_BULLETS = (
     "`plugins/shode-house-antigravity` host artifact without that extension.\n"
 )
 ANTIGRAVITY_HOST_BULLETS = (
-    "- Antigravity: portable root manifest, the same six role contracts and 20 skills. Use `cook` as the entry.\n"
+    "- Antigravity: portable root manifest, the same six role contracts and the `cook` skill (the other 19 skills "
+    "are read from knowledge/). Use `cook` as the entry.\n"
     "- This artifact excludes Codex manifests and lifecycle hooks. Skill discovery alone does not prove separate-worker "
     "delegation; if unavailable, report team execution BLOCKED instead of role-playing workers.\n"
     "- Keep the host's own command approval and sandbox enabled for shell and MCP actions.\n"
@@ -369,6 +371,43 @@ def skill_footer(bucket, name, pointer):
 AGENT_FOOTER = "\n" + RESOLVE
 
 
+def skill_paths(source_entries):
+    """name -> source path of every shipped skill except the entry (cook), from the source tree (never a hand list)."""
+    return {Path(p).parent.name: p for p in sorted(source_entries)
+            if p.startswith("skills/") and p.endswith("/SKILL.md") and Path(p).parent.name != "cook"}
+
+
+def file_skills_line(source_entries):
+    """4.2.1 cook-only surface: the one generated paragraph that says how a non-entry skill is loaded."""
+    buckets = {}
+    for name, path in skill_paths(source_entries).items():
+        buckets.setdefault(Path(path).parts[1], []).append(name)
+    listed = "; ".join(f"{b}: {', '.join(sorted(buckets[b]))}" for b in BUCKETS if b in buckets)
+    return ("Only the `cook` skill is registered on this host; every other Shode House skill ships as a file. "
+            "Wherever a step, a preload or a delegation loads `shode-house:<name>` for one of the skills below, "
+            "Read `" + PLUGIN_ROOT + "knowledge/skills/<bucket>/<name>/SKILL.md` instead of calling the Skill "
+            "tool, and resolve the files it names from that file's directory. The six agent types (plan, build, "
+            "verify, operate, secure, design) stay native agents. Skills by bucket: " + listed + ".\n")
+
+
+def preload_names(text, name):
+    """The `skills:` preload of one agent source (CI #13 JSON-style list), `<plugin>:` stripped."""
+    header, _ = frontmatter(text, name)
+    for line in header.splitlines():
+        if line.startswith("skills:"):
+            return [n.split(":", 1)[-1] for n in json.loads(line.split(":", 1)[1])]
+    return []
+
+
+def agent_footer(text, name, source_entries):
+    paths = skill_paths(source_entries)
+    # a preload outside the file skills (only `cook`, itself reported by the audit) has no file to read here
+    reads = ", ".join("`" + PLUGIN_ROOT + "knowledge/" + paths[n] + "`" for n in preload_names(text, name) if n in paths)
+    line = ("Before any other step, Read these skills in full (the `skills:` preload above names skills that are "
+            "not registered on this tree, so the host loads nothing for it): " + reads + ".\n") if reads else ""
+    return AGENT_FOOTER + "\n" + file_skills_line(source_entries) + line
+
+
 def collect(root=ROOT):
     root = root.resolve()
     # U22 H3: the manifest's fields (description, author, homepage ...) are copied into the tree, so it is read
@@ -481,14 +520,15 @@ def generate(name, source, source_entries, pointer_set):
     if problems:
         raise ValueError("\n  ".join(problems))
     if name.startswith("agents/"):
-        return rewrite(text, name) + AGENT_FOOTER
+        return rewrite(text, name) + agent_footer(text, name, source_entries)
     bucket, skill = Path(name).parts[1], Path(name).parent.name
     footer = skill_footer(bucket, skill, skill in pointer_set)
     if skill != "cook":
         return rewrite(text, name) + footer
     header, rest = frontmatter(text, name)
     # §5.8.1 item 2: the block goes directly after the frontmatter, separated by one blank line.
-    return header + "\n" + style_floor_block(source_entries) + rewrite(rest, name) + footer
+    return (header + "\n" + style_floor_block(source_entries) + rewrite(rest, name) + footer
+            + "\n" + file_skills_line(source_entries))
 
 
 def payload(root=ROOT):
@@ -499,7 +539,14 @@ def payload(root=ROOT):
     entries = {"knowledge/" + name: body for name, body in source_entries.items()}
     preload = preloaded(source_entries)
     pointer_set = {Path(p).parent.name for p in skills} - preload - {"cook"}
-    for name in [*roles, *skills]:
+    # 4.2.1: `cook` is the only registered skill; the other 19 stay in knowledge/ and are Read on demand. Their
+    # sources still pass the same reference checks a generated copy would (S2I-1 / R53 / S23-9).
+    for name in skills:
+        if name != ENTRY_SOURCE:
+            problems = source_problems(name, terminated(source_entries[name].decode("utf-8")), source_entries)
+            if problems:
+                raise ValueError("\n  ".join(problems))
+    for name in [*roles, ENTRY_SOURCE]:
         target = name if name in roles else "skills/" + Path(name).parent.name + "/SKILL.md"
         if target in entries:
             raise ValueError(f"duplicate discovery path: {target}")
@@ -510,7 +557,7 @@ def payload(root=ROOT):
     for name in sorted(p for p in source_entries if p.startswith("output-styles/")):
         if name in entries:
             raise ValueError(f"duplicate discovery path: {name}")
-        entries[name] = source_entries[name]
+        entries[name] = source_entries[name] + ("\n" + file_skills_line(source_entries)).encode()
     authored = sorted(Path(p).stem for p in source_entries
                       if p.startswith("commands/") and p.endswith(".md"))
     if authored != sorted(PUBLISHED_COMMANDS):
@@ -530,7 +577,8 @@ def payload(root=ROOT):
     entries[".claude-plugin/plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
     codex = {key: manifest[key] for key in
              ("name", "version", "author", "homepage", "repository", "license")}
-    codex.update(description=CODEX_DESCRIPTION, skills="./skills/",
+    codex_skill_root = "./skills/cook/"
+    codex.update(description=CODEX_DESCRIPTION, skills=codex_skill_root,
                  hooks="./codex-hooks/hooks.json",
                  extensions={"com.openai": {"onboardingSkill": "./skills/cook/SKILL.md"}}, interface={
         "displayName": "Shode House",
@@ -551,7 +599,7 @@ def payload(root=ROOT):
         "name": manifest["name"],
         "version": manifest["version"],
         "description": CODEX_DESCRIPTION,
-        "skills": "./skills/",
+        "skills": codex_skill_root,
         "extensions": {"com.openai": {
             "hooks": "./codex-hooks/hooks.json",
             "onboardingSkill": "./skills/cook/SKILL.md",
@@ -584,9 +632,10 @@ def unified_payload(root=ROOT):
     entries[".cursor-plugin/plugin.json"] = (json.dumps(cursor, indent=2) + "\n").encode()
     entries["HOST-NOTES.md"] = (
         f"# Shode House {version} host notes\n\n"
-        f"All {roles} role sources and 20 skills are preserved under knowledge/. The agent files and skill roots "
+        f"All {roles} role sources and 20 skills are preserved under knowledge/. Only `cook` is registered as a "
+        "skill; the other 19 are read from knowledge/ when a step loads them. The agent files and the cook skill "
         "at the plugin root are those sources with plugin-root and `./`/`../` references re-pointed "
-        "to their knowledge/ copies, plus a generated resolution footer; "
+        "to their knowledge/ copies, plus a generated resolution footer (agents read their former preloads); "
         "Use cook as the entry.\n\n" + HOST_BULLETS + "\n"
         "Skill discovery does not prove separate workers are available. If delegation is "
         "unavailable, report team execution BLOCKED; never replace it with role-play.\n"
@@ -742,10 +791,17 @@ def audit(entries, source_entries):
     pointer_set = {Path(p).parent.name for p in skills} - preload - {"cook"}
     generated = {}
     for name in roles:
-        generated[name] = (name, AGENT_FOOTER)
-    for name in skills:
-        bucket, skill = Path(name).parts[1], Path(name).parent.name
-        generated["skills/" + skill + "/SKILL.md"] = (name, skill_footer(bucket, skill, skill in pointer_set))
+        generated[name] = (name, agent_footer(terminated(source_entries[name].decode("utf-8")), name, source_entries))
+    generated[ENTRY_SKILL] = (ENTRY_SOURCE,
+                              skill_footer("workflow", "cook", False) + "\n" + file_skills_line(source_entries))
+    # 4.2.1: `cook` is the only registered skill; every other skill is Read from knowledge/.
+    for path in sorted(entries):
+        if re.fullmatch(r"skills/[^/]+/SKILL\.md", path) and path != ENTRY_SKILL:
+            found.append(f"{path}: only `cook` is a registered skill; the others ship under knowledge/ only")
+    for name in sorted(p for p in source_entries if p.startswith("output-styles/")):
+        expected = source_entries[name] + ("\n" + file_skills_line(source_entries)).encode()
+        if entries.get(name) != expected:
+            found.append(f"{name}: not the source style followed by the generated file-skills paragraph")
     for path, (name, footer) in sorted(generated.items()):
         if path not in entries:
             found.append(f"{path}: missing from the tree")

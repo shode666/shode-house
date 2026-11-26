@@ -50,28 +50,50 @@ class CookSurfaceTest(unittest.TestCase):
     def setUpClass(cls):
         cls.trees = {"main": pack.unified_payload()[1], "antigravity": pack.antigravity_payload()[1]}
 
-    def test_marketplace_skill_metadata_leaves_only_cook_user_invocable(self):
+    def test_cook_is_the_only_registered_skill_and_the_rest_are_files(self):
+        # 4.2.1: `cook` is the only registered skill in every generated tree; the other 19 ship under
+        # knowledge/ and every agent, the router style and cook name how to Read them.
+        source = {p.parent.name: p.relative_to(ROOT).as_posix()
+                  for b in pack.BUCKETS for p in (ROOT / "skills" / b).glob("*/SKILL.md")}
+        self.assertEqual(20, len(source))
         for host, entries in self.trees.items():
             with self.subTest(host=host):
-                visible = set()
-                for path, body in entries.items():
-                    if not re.fullmatch(r"skills/[^/]+/SKILL\.md", path):
-                        continue
-                    header = body.decode().split("---", 2)[1]
-                    if "user-invocable: false" not in header.splitlines():
-                        visible.add(Path(path).parent.name)
-                self.assertEqual({"cook"}, visible)
-
-    def test_no_tree_path_is_named_ask_and_no_tree_ships_a_command(self):
-        for host, entries in self.trees.items():
-            with self.subTest(host=host):
-                self.assertEqual([], [p for p in entries if named_ask(p)])
-                self.assertEqual([], [p for p in entries if p.startswith(("commands/", "knowledge/commands/"))])
                 flat = {Path(p).parent.name for p in entries if re.fullmatch(r"skills/[^/]+/SKILL\.md", p)}
-                source = {p.parent.name for b in pack.BUCKETS for p in (ROOT / "skills" / b).glob("*/SKILL.md")}
-                self.assertEqual(source, flat)
-                self.assertEqual(20, len(flat))
-                self.assertIn("cook", flat)
+                self.assertEqual({"cook"}, flat)
+                for name, rel in source.items():
+                    self.assertIn("knowledge/" + rel, entries, name)
+                line = pack.file_skills_line(pack.collect()[1])
+                for name in set(source) - {"cook"}:
+                    self.assertIn(name, line)
+                carriers = [p for p in entries if re.fullmatch(r"agents/[^/]+\.md|output-styles/[^/]+\.md", p)]
+                carriers.append("skills/cook/SKILL.md")
+                self.assertEqual(8, len(carriers))
+                for path in carriers:
+                    self.assertIn(line, entries[path].decode(), path)
+
+    def test_every_loaded_skill_and_agent_preload_resolves_to_a_shipped_file(self):
+        # A skill named as `shode-house:<name>` in a generated agent, the router style or cook is either an agent
+        # type (still native) or a skill whose knowledge/ SKILL.md ships; each agent reads its former preloads.
+        source = {p.parent.name: p.relative_to(ROOT).as_posix()
+                  for b in pack.BUCKETS for p in (ROOT / "skills" / b).glob("*/SKILL.md")}
+        for host, entries in self.trees.items():
+            cook = entries["skills/cook/SKILL.md"].decode()
+            for name in WORKFLOWS:   # the router's table links each workflow to its shipped knowledge/ file
+                link = f"](../../knowledge/references/workflows/{name}.md)"
+                self.assertIn(link, cook, (host, name))
+                self.assertIn(f"knowledge/references/workflows/{name}.md", entries, (host, name))
+            for path in [p for p in entries if re.fullmatch(r"agents/[^/]+\.md|output-styles/[^/]+\.md", p)
+                         ] + ["skills/cook/SKILL.md"] + [f"knowledge/references/workflows/{n}.md" for n in WORKFLOWS]:
+                text = entries[path].decode()
+                with self.subTest(host=host, path=path):
+                    for name in set(re.findall(r"shode-house:([a-z][a-z0-9-]*)", text)):
+                        if name in pack.ROLES or name == "cook":
+                            continue
+                        self.assertIn(name, source, f"{path} loads an unknown skill shode-house:{name}")
+                        self.assertIn("knowledge/" + source[name], entries)
+                    if path.startswith("agents/"):
+                        for name in pack.preload_names(text, path):
+                            self.assertIn(pack.PLUGIN_ROOT + "knowledge/" + source[name], text)
 
     def test_cook_skill_floor_and_footer_are_the_generated_ones(self):
         for host, entries in self.trees.items():
@@ -80,7 +102,8 @@ class CookSurfaceTest(unittest.TestCase):
                 self.assertTrue(text.startswith("---\nname: cook\n"))
                 block = pack.style_floor_block(pack.collect()[1])
                 self.assertEqual("\n\n" + block, text.split("---", 2)[2][:2 + len(block)])
-                self.assertTrue(text.endswith(pack.AUTHORITY_ENTRY))
+                # 4.2.1: the authority line, then (after a blank line) the generated file-skills paragraph
+                self.assertTrue(text.endswith(pack.AUTHORITY_ENTRY + "\n" + pack.file_skills_line(pack.collect()[1])))
 
     def test_no_manifest_value_names_ask_and_no_manifest_registers_a_command(self):
         manifests = [ROOT / ".claude-plugin/plugin.json", ROOT / ".claude-plugin/marketplace.json"]

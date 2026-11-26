@@ -1,6 +1,5 @@
 ---
 name: incident
-user-invocable: false
 description: Respond to active production impact such as an outage, degradation, data loss or breach by assigning severity and mitigating first, then a blameless postmortem. Not for bugs not currently hurting production users, nor planned maintenance.
 ---
 
